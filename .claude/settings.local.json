@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create:*)",
+      "Bash(npx:*)",
+      "Bash(npm install:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(npm run:*)",
+      "Bash(node:*)",
+      "Bash(git:*)"
+    ]
+  }
+}
