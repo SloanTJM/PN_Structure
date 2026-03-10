@@ -943,7 +943,7 @@ export default function EnterprisePnlPage() {
                           )}
                           {!k.neutral && !k.threshold && k.vN != null && (
                             <span className={`text-xs font-semibold ${improving ? 'text-green-600' : 'text-red-600'}`}>
-                              {improving ? '\u2193' : '\u2191'} {k.fmt(k.vN)}
+                              {k.vN > k.v1 ? '\u2191' : '\u2193'} {k.fmt(k.vN)}
                             </span>
                           )}
                           {k.neutral && (

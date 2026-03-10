@@ -16,7 +16,7 @@ const TABS = [
 ];
 
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(true); // TODO: re-enable login
+  const [loggedIn, setLoggedIn] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
