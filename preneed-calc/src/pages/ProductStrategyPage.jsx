@@ -2,12 +2,12 @@
 const AGENT_RATES = {
   single: {
     '40-60': [10.00], '61-65': [9.40], '66-70': [7.80],
-    '71-75': [6.00], '76-80': [4.60], '81-85': [2.40],
+    '71-75': [6.00], '76-80': [4.60], '81-85': [2.40], '86-90': [1.25],
   },
   '3pay': {
     '40-60': [6.72, 2.24, 2.24], '61-65': [6.34, 2.11, 2.11],
     '66-70': [5.66, 1.89, 1.89], '71-75': [5.00, 1.67, 1.67],
-    '76-80': [4.33, 1.44, 1.44], '81-85': [3.34, 1.11, 1.11],
+    '76-80': [4.33, 1.44, 1.44], '81-85': [3.34, 1.11, 1.11], '86-90': [2.16, 0.72, 0.72],
   },
   '5pay': {
     '40-60': [7.16, 2.39, 2.39], '61-65': [6.80, 2.27, 2.27],
@@ -28,7 +28,7 @@ const AGENT_RATES = {
 
 const TERM_KEYS = ['single', '3pay', '5pay', '10pay', '20pay'];
 const TERM_LABELS = { single: 'Single Pay', '3pay': '3-Pay', '5pay': '5-Pay', '10pay': '10-Pay', '20pay': '20-Pay' };
-const AGE_BANDS = ['40-60', '61-65', '66-70', '71-75', '76-80', '81-85'];
+const AGE_BANDS = ['40-60', '61-65', '66-70', '71-75', '76-80', '81-85', '86-90'];
 
 export default function ProductStrategyPage() {
   return (
@@ -216,7 +216,7 @@ export default function ProductStrategyPage() {
               </thead>
               <tbody>
                 {[
-                  { condition: 'Customer > 80 & healthy', product: 'Single-Pay Annuity', commission: '~2.5%', override: 'See schedule' },
+                  { condition: 'Customer > 80 & healthy', product: 'Single-Pay Annuity', commission: '~1.83%', override: 'See schedule' },
                 ].map((row, i) => (
                   <tr key={i} className={`border-b border-navy-100 ${i % 2 === 0 ? 'bg-white' : 'bg-navy-50'}`}>
                     <td className="px-4 py-2 text-navy-700">{row.condition}</td>

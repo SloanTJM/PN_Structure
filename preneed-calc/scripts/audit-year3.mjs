@@ -15,19 +15,19 @@ import {
 } from '../src/calculations.js';
 
 /* ─── Constants (identical to EnterprisePnlPage.jsx) ─── */
-const AGE_BANDS = ['40-60', '61-65', '66-70', '71-75', '76-80', '81-85'];
-const AGE_MIDPOINTS = { '40-60': 50, '61-65': 63, '66-70': 68, '71-75': 73, '76-80': 78, '81-85': 83 };
+const AGE_BANDS = ['40-60', '61-65', '66-70', '71-75', '76-80', '81-85', '86-90'];
+const AGE_MIDPOINTS = { '40-60': 50, '61-65': 63, '66-70': 68, '71-75': 73, '76-80': 78, '81-85': 83, '86-90': 88 };
 const TERM_KEYS = [3, 5, 10, 20];
 
 const AGENT_RATES = {
   single: {
     '40-60': [10.00], '61-65': [9.40], '66-70': [7.80],
-    '71-75': [6.00], '76-80': [4.60], '81-85': [2.40],
+    '71-75': [6.00], '76-80': [4.60], '81-85': [2.40], '86-90': [1.25],
   },
   '3pay': {
     '40-60': [6.72, 2.24, 2.24], '61-65': [6.34, 2.11, 2.11],
     '66-70': [5.66, 1.89, 1.89], '71-75': [5.00, 1.67, 1.67],
-    '76-80': [4.33, 1.44, 1.44], '81-85': [3.34, 1.11, 1.11],
+    '76-80': [4.33, 1.44, 1.44], '81-85': [3.34, 1.11, 1.11], '86-90': [2.16, 0.72, 0.72],
   },
   '5pay': {
     '40-60': [7.16, 2.39, 2.39], '61-65': [6.80, 2.27, 2.27],
@@ -53,7 +53,7 @@ const DEFAULTS = {
   startYear: 2027,
   mixWL: 35, mixAnnuity: 35, mixGraded: 20, mixTrust: 10,
   mix3Pay: 15, mix5Pay: 35, mix10Pay: 35, mix20Pay: 15,
-  mixAge40_60: 20, mixAge61_65: 25, mixAge66_70: 30, mixAge71_75: 15, mixAge76_80: 7, mixAge81_85: 3,
+  mixAge40_60: 20, mixAge61_65: 25, mixAge66_70: 30, mixAge71_75: 15, mixAge76_80: 7, mixAge81_85: 2, mixAge86_90: 1,
   earnRate: 4.5, guaranteedRate: 2,
   financeChargeRate: 7, passThroughTaxRate: 37, premiumTaxRate: 0.875, corporateTaxRate: 21,
   serviceDeliveryCost: 75, baseAdminCost: 200_000, adminGrowthRate: 3, chargebackRate: 5,

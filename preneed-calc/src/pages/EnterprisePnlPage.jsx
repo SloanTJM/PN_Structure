@@ -1,41 +1,18 @@
 import { useState, useMemo } from 'react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer,
+  Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { buildDeathDistribution, getScaledRate, getGradedScaledRate, getGradedBenefitFactor } from '../calculations';
 import { fmt, fmtPct, fmtLarge } from '../utils/formatters';
 import InputGroup from '../components/InputGroup';
 import NumberInput from '../components/NumberInput';
 import Chevron from '../components/Chevron';
-
-/* ─── Commission Rate Tables (duplicated from CommissionsPage — not exported) ─── */
-const AGENT_RATES = {
-  single: {
-    '40-60': [10.00], '61-65': [9.40], '66-70': [7.80],
-    '71-75': [6.00], '76-80': [4.60], '81-85': [2.40],
-  },
-  '3pay': {
-    '40-60': [6.72, 2.24, 2.24], '61-65': [6.34, 2.11, 2.11],
-    '66-70': [5.66, 1.89, 1.89], '71-75': [5.00, 1.67, 1.67],
-    '76-80': [4.33, 1.44, 1.44], '81-85': [3.34, 1.11, 1.11],
-  },
-  '5pay': {
-    '40-60': [7.16, 2.39, 2.39], '61-65': [6.80, 2.27, 2.27],
-    '66-70': [6.48, 2.16, 2.16], '71-75': [6.00, 2.00, 2.00],
-    '76-80': [5.40, 1.80, 1.80], '81-85': [4.08, 1.36, 1.36],
-  },
-  '10pay': {
-    '40-60': [8.16, 2.72, 2.72], '61-65': [7.68, 2.56, 2.56],
-    '66-70': [7.44, 2.48, 2.48], '71-75': [6.84, 2.28, 2.28],
-    '76-80': [6.14, 2.05, 2.05], '81-85': [4.08, 1.36, 1.36],
-  },
-  '20pay': {
-    '40-60': [6.00, 2.00, 2.00], '61-65': [5.64, 1.88, 1.88],
-    '66-70': [4.68, 1.56, 1.56], '71-75': [3.60, 1.20, 1.20],
-    '76-80': [2.76, 0.92, 0.92],
-  },
-};
+import {
+  AGENT_RATES, SEMI_ANNUAL_TIERS, MONTHLY_BONUSES, ANNUAL_BONUSES,
+  ROLE_DEFAULTS, BUCKET_DEFAULTS, AFTERCARE_DEFAULTS,
+  calcSemiAnnualBonus,
+} from '../commissionConstants';
 
 /* ─── Validation Badge ─── */
 function SumBadge({ values, label }) {
@@ -49,8 +26,8 @@ function SumBadge({ values, label }) {
 }
 
 /* ─── Constants ─── */
-const AGE_BANDS = ['40-60', '61-65', '66-70', '71-75', '76-80', '81-85'];
-const AGE_MIDPOINTS = { '40-60': 50, '61-65': 63, '66-70': 68, '71-75': 73, '76-80': 78, '81-85': 83 };
+const AGE_BANDS = ['40-60', '61-65', '66-70', '71-75', '76-80', '81-85', '86-90'];
+const AGE_MIDPOINTS = { '40-60': 50, '61-65': 63, '66-70': 68, '71-75': 73, '76-80': 78, '81-85': 83, '86-90': 88 };
 const TERM_KEYS = [3, 5, 10, 20];
 
 const DEFAULTS = {
@@ -60,11 +37,18 @@ const DEFAULTS = {
   startYear: 2027,
   mixWL: 35, mixAnnuity: 35, mixGraded: 20, mixTrust: 10,
   mix3Pay: 15, mix5Pay: 35, mix10Pay: 35, mix20Pay: 15,
-  mixAge40_60: 20, mixAge61_65: 25, mixAge66_70: 30, mixAge71_75: 15, mixAge76_80: 7, mixAge81_85: 3,
+  mixAge40_60: 20, mixAge61_65: 25, mixAge66_70: 30, mixAge71_75: 15, mixAge76_80: 7, mixAge81_85: 2, mixAge86_90: 1,
   earnRate: 4.5, guaranteedRate: 2,
   financeChargeRate: 7, passThroughTaxRate: 37, premiumTaxRate: 0.875, corporateTaxRate: 21,
-  serviceDeliveryCost: 75, baseAdminCost: 200000, adminGrowthRate: 3, chargebackRate: 5,
-  cemeteryMix: 50, perpCareRate: 10, cemeteryMargin: 50, cemeteryCommRate: 7.5,
+  serviceDeliveryCost: 70, chargebackRate: 5,
+  volumePerCloser: 2000000, volumePerSetter: 6000000, productionPerAftercare: 10000000,
+  closerHourlyWage: ROLE_DEFAULTS.closer.hourlyWage, setterHourlyWage: ROLE_DEFAULTS.setter.hourlyWage,
+  aftercareHourlyWage: ROLE_DEFAULTS.aftercare.hourlyWage,
+  leaderBaseSalary: 125982,
+  pctSetterSourced: BUCKET_DEFAULTS.pctSetterSourced, closerSplitPct: BUCKET_DEFAULTS.closerSplitPct,
+  aftercareAnnualVolume: BUCKET_DEFAULTS.aftercareAnnualVolume,
+  aftercareLeadPct: AFTERCARE_DEFAULTS.aftercareLeadPct, specialistShare: AFTERCARE_DEFAULTS.specialistShare,
+  cemeteryMix: 50, perpCareRate: 15, cemeteryMargin: 70,
 };
 
 /* ─── Chart Tooltip ─── */
@@ -83,6 +67,7 @@ function ChartTooltip({ active, payload, label }) {
 /* ─── Main Component ─── */
 export default function EnterprisePnlPage() {
   const [settingsOpen, setSettingsOpen] = useState(true);
+  const [compHealthOpen, setCompHealthOpen] = useState(true);
   const [showDetail, setShowDetail] = useState(false);
   const [tablePopout, setTablePopout] = useState(false);
 
@@ -111,6 +96,7 @@ export default function EnterprisePnlPage() {
   const [mixAge71_75, setMixAge71_75] = useState(DEFAULTS.mixAge71_75);
   const [mixAge76_80, setMixAge76_80] = useState(DEFAULTS.mixAge76_80);
   const [mixAge81_85, setMixAge81_85] = useState(DEFAULTS.mixAge81_85);
+  const [mixAge86_90, setMixAge86_90] = useState(DEFAULTS.mixAge86_90);
 
   // Financial assumptions
   const [earnRate, setEarnRate] = useState(DEFAULTS.earnRate);
@@ -122,15 +108,27 @@ export default function EnterprisePnlPage() {
 
   // Operating assumptions
   const [serviceDeliveryCost, setServiceDeliveryCost] = useState(DEFAULTS.serviceDeliveryCost);
-  const [baseAdminCost, setBaseAdminCost] = useState(DEFAULTS.baseAdminCost);
-  const [adminGrowthRate, setAdminGrowthRate] = useState(DEFAULTS.adminGrowthRate);
   const [chargebackRate, setChargebackRate] = useState(DEFAULTS.chargebackRate);
+
+  // Sales team scaling
+  const [volumePerCloser, setVolumePerCloser] = useState(DEFAULTS.volumePerCloser);
+  const [volumePerSetter, setVolumePerSetter] = useState(DEFAULTS.volumePerSetter);
+  const [productionPerAftercare, setProductionPerAftercare] = useState(DEFAULTS.productionPerAftercare);
+  const [closerHourlyWage, setCloserHourlyWage] = useState(DEFAULTS.closerHourlyWage);
+  const [setterHourlyWage, setSetterHourlyWage] = useState(DEFAULTS.setterHourlyWage);
+  const [aftercareHourlyWage, setAftercareHourlyWage] = useState(DEFAULTS.aftercareHourlyWage);
+  const [leaderBaseSalary, setLeaderBaseSalary] = useState(DEFAULTS.leaderBaseSalary);
+
+  const [pctSetterSourced, setPctSetterSourced] = useState(DEFAULTS.pctSetterSourced);
+  const [closerSplitPct, setCloserSplitPct] = useState(DEFAULTS.closerSplitPct);
+  const [aftercareAnnualVolume, setAftercareAnnualVolume] = useState(DEFAULTS.aftercareAnnualVolume);
+  const [aftercareLeadPct, setAftercareLeadPct] = useState(DEFAULTS.aftercareLeadPct);
+  const [specialistShare, setSpecialistShare] = useState(DEFAULTS.specialistShare);
 
   // Cemetery
   const [cemeteryMix, setCemeteryMix] = useState(DEFAULTS.cemeteryMix);
   const [perpCareRate, setPerpCareRate] = useState(DEFAULTS.perpCareRate);
   const [cemeteryMargin, setCemeteryMargin] = useState(DEFAULTS.cemeteryMargin);
-  const [cemeteryCommRate, setCemeteryCommRate] = useState(DEFAULTS.cemeteryCommRate);
 
   function resetDefaults() {
     setInitialProduction(DEFAULTS.initialProduction); setGrowthRate(DEFAULTS.growthRate);
@@ -141,21 +139,28 @@ export default function EnterprisePnlPage() {
     setMix10Pay(DEFAULTS.mix10Pay); setMix20Pay(DEFAULTS.mix20Pay);
     setMixAge40_60(DEFAULTS.mixAge40_60); setMixAge61_65(DEFAULTS.mixAge61_65);
     setMixAge66_70(DEFAULTS.mixAge66_70); setMixAge71_75(DEFAULTS.mixAge71_75);
-    setMixAge76_80(DEFAULTS.mixAge76_80); setMixAge81_85(DEFAULTS.mixAge81_85);
+    setMixAge76_80(DEFAULTS.mixAge76_80); setMixAge81_85(DEFAULTS.mixAge81_85); setMixAge86_90(DEFAULTS.mixAge86_90);
     setEarnRate(DEFAULTS.earnRate); setGuaranteedRate(DEFAULTS.guaranteedRate);
     setFinanceChargeRate(DEFAULTS.financeChargeRate); setPassThroughTaxRate(DEFAULTS.passThroughTaxRate);
     setPremiumTaxRate(DEFAULTS.premiumTaxRate); setCorporateTaxRate(DEFAULTS.corporateTaxRate);
-    setServiceDeliveryCost(DEFAULTS.serviceDeliveryCost); setBaseAdminCost(DEFAULTS.baseAdminCost);
-    setAdminGrowthRate(DEFAULTS.adminGrowthRate); setChargebackRate(DEFAULTS.chargebackRate);
+    setServiceDeliveryCost(DEFAULTS.serviceDeliveryCost); setChargebackRate(DEFAULTS.chargebackRate);
+    setVolumePerCloser(DEFAULTS.volumePerCloser); setVolumePerSetter(DEFAULTS.volumePerSetter);
+    setProductionPerAftercare(DEFAULTS.productionPerAftercare);
+    setCloserHourlyWage(DEFAULTS.closerHourlyWage); setSetterHourlyWage(DEFAULTS.setterHourlyWage);
+    setAftercareHourlyWage(DEFAULTS.aftercareHourlyWage);
+    setLeaderBaseSalary(DEFAULTS.leaderBaseSalary);
+    setPctSetterSourced(DEFAULTS.pctSetterSourced); setCloserSplitPct(DEFAULTS.closerSplitPct);
+    setAftercareAnnualVolume(DEFAULTS.aftercareAnnualVolume);
+    setAftercareLeadPct(DEFAULTS.aftercareLeadPct); setSpecialistShare(DEFAULTS.specialistShare);
     setCemeteryMix(DEFAULTS.cemeteryMix); setPerpCareRate(DEFAULTS.perpCareRate);
-    setCemeteryMargin(DEFAULTS.cemeteryMargin); setCemeteryCommRate(DEFAULTS.cemeteryCommRate);
+    setCemeteryMargin(DEFAULTS.cemeteryMargin);
   }
 
   /* ─── Calculation Engine ─── */
   const projection = useMemo(() => {
     const ageMixes = {
       '40-60': mixAge40_60 / 100, '61-65': mixAge61_65 / 100, '66-70': mixAge66_70 / 100,
-      '71-75': mixAge71_75 / 100, '76-80': mixAge76_80 / 100, '81-85': mixAge81_85 / 100,
+      '71-75': mixAge71_75 / 100, '76-80': mixAge76_80 / 100, '81-85': mixAge81_85 / 100, '86-90': mixAge86_90 / 100,
     };
     const termMixes = { 3: mix3Pay / 100, 5: mix5Pay / 100, 10: mix10Pay / 100, 20: mix20Pay / 100 };
     const prodMixes = { wl: mixWL / 100, annuity: mixAnnuity / 100, graded: mixGraded / 100, trust: mixTrust / 100 };
@@ -233,6 +238,87 @@ export default function EnterprisePnlPage() {
     // Weighted avg payment term
     const avgPayTerm = 3 * termMixes[3] + 5 * termMixes[5] + 10 * termMixes[10] + 20 * termMixes[20];
 
+    // ── Comp helper: calculate gross commission for a given volume using CommissionsPage logic ──
+    // Uses the Enterprise P&L product mix mapped to CommissionsPage terms:
+    //   preneed = WL + Annuity + Graded portion, cemetery = cemetery portion, trust = trust portion
+    // Payment term & age mixes come from the P&L inputs
+    const commPageTermKeys = ['single', '3pay', '5pay', '10pay', '20pay'];
+    // Map Enterprise product mix to CommissionsPage "mix" percentages
+    // Insurance products are a fraction of total production (remainder is cemetery)
+    const insuranceShareOfTotal = 1 - cemeteryMix / 100;
+    const cemeteryShareOfTotal = cemeteryMix / 100;
+
+    // Preneed/trust as % of TOTAL production (not just insurance)
+    const insurProdPct = (prodMixes.wl + prodMixes.annuity + prodMixes.graded + prodMixes.trust);
+    const preneedPctOfTotal = insurProdPct > 0
+      ? (prodMixes.wl + prodMixes.annuity + prodMixes.graded) / insurProdPct * insuranceShareOfTotal * 100 : 0;
+    const trustPctOfTotal = insurProdPct > 0
+      ? prodMixes.trust / insurProdPct * insuranceShareOfTotal * 100 : 0;
+
+    // Within preneed: annuity is single-pay, rest split by term mix
+    const multiPayProdPct = prodMixes.wl + prodMixes.graded;
+    const annuityProdPct = prodMixes.annuity;
+    const totalPreneedProd = multiPayProdPct + annuityProdPct;
+    const singlePayPctOfPreneed = totalPreneedProd > 0 ? (annuityProdPct / totalPreneedProd) * 100 : 0;
+    const multiPayPctOfPreneed = 100 - singlePayPctOfPreneed;
+
+    // Cemetery commissionable base: after perpetual care deduction
+    const cemeteryPerpCareFrac = perpCareRate / 100;
+
+    function calcGrossCommForVolume(annualFaceValue, modelingYear) {
+      // Commission mix percentages — map Enterprise P&L inputs to CommissionsPage format
+      const mixSinglePay = singlePayPctOfPreneed;
+      const termMixScale = multiPayPctOfPreneed / 100;
+      const commTermMixes = {
+        single: mixSinglePay,
+        '3pay': (mix3Pay) * termMixScale,
+        '5pay': (mix5Pay) * termMixScale,
+        '10pay': (mix10Pay) * termMixScale,
+        '20pay': (mix20Pay) * termMixScale,
+      };
+      const commAgeMixes = {
+        '40-60': mixAge40_60, '61-65': mixAge61_65, '66-70': mixAge66_70,
+        '71-75': mixAge71_75, '76-80': mixAge76_80, '81-85': mixAge81_85, '86-90': mixAge86_90,
+      };
+
+      // Preneed commission on insurance portion only
+      let preneedYr1 = 0, preneedYr2 = 0, preneedYr3 = 0;
+      for (const term of commPageTermKeys) {
+        const termTable = AGENT_RATES[term];
+        for (const age of AGE_BANDS) {
+          if (!termTable[age]) continue;
+          const weight = (commAgeMixes[age] / 100) * (commTermMixes[term] / 100) * (preneedPctOfTotal / 100);
+          const volume = annualFaceValue * weight;
+          const rates = termTable[age];
+          preneedYr1 += volume * (rates[0] / 100);
+          if (modelingYear >= 2 && rates[1]) preneedYr2 += volume * (rates[1] / 100);
+          if (modelingYear >= 3 && rates[2]) preneedYr3 += volume * (rates[2] / 100);
+        }
+      }
+      // Trust commission on insurance trust portion
+      const trustComm = annualFaceValue * (trustPctOfTotal / 100) * 0.0375;
+      // Cemetery commission at 7.5% on after-perp-care face
+      const cemCommBase = annualFaceValue * cemeteryShareOfTotal * (1 - cemeteryPerpCareFrac);
+      const cemeteryComm = cemCommBase * 0.075;
+      const grossComm = preneedYr1 + preneedYr2 + preneedYr3 + trustComm + cemeteryComm;
+      return { preneedYr1, preneedYr2, preneedYr3, trustComm, cemeteryComm, grossComm };
+    }
+
+    // Helper: bonuses for a given volume
+    function calcMonthlyBonusAnnual(volume) {
+      const monthlyAvg = volume / 12;
+      for (const tier of MONTHLY_BONUSES) {
+        if (monthlyAvg >= tier.threshold) return tier.bonus * 12;
+      }
+      return 0;
+    }
+    function calcAnnualBonus(volume) {
+      for (const tier of ANNUAL_BONUSES) {
+        if (volume >= tier.threshold) return tier.bonus;
+      }
+      return 0;
+    }
+
     // Step 3: Projection loop
     const vintages = [];
     const yearData = [];
@@ -242,7 +328,12 @@ export default function EnterprisePnlPage() {
     let cumulativeFH = 0;
 
     for (let Y = 1; Y <= projectionYears; Y++) {
-      const newFace = initialProduction * Math.pow(1 + growthRate / 100, Y - 1);
+      // Bottom-up production: aftercare count scales with total production
+      const totalProduction = initialProduction * Math.pow(1 + growthRate / 100, Y - 1);
+      const aftercareCount = Math.max(1, Math.floor(totalProduction / productionPerAftercare));
+      const aftercareProduction = aftercareCount * aftercareAnnualVolume;
+      const closerProduction = totalProduction - aftercareProduction;
+      const newFace = totalProduction;
       const insuranceFace = newFace * (1 - cemeteryMix / 100);
       const cemeteryFace = newFace * (cemeteryMix / 100);
 
@@ -263,21 +354,16 @@ export default function EnterprisePnlPage() {
       // Trust premiums NOT on TJM's books — separate entity; trust reserves not on TJM balance sheet
 
       // Multi-pay premiums from all active vintages
-      // Gross premiums = what customers actually pay (loaded rates)
-      // Net premiums = actuarial cost portion (face / term) — goes into reserves
-      // Loading = gross - net — TJM Life revenue that funds commissions and profit
       let multiPayPremiums = 0;
       let multiPayNetPremiums = 0;
       for (const V of vintages) {
         const n = Y - V.year;
-        // WL premiums
         for (const term of TERM_KEYS) {
-          if (n >= term) continue; // payment term expired
+          if (n >= term) continue;
           const survivingFace = V.wlFace * termMixes[term] * blendedSurvival[n];
           multiPayPremiums += survivingFace * (weightedWLRate[term] || 0) * 12;
           multiPayNetPremiums += survivingFace / term;
         }
-        // Graded premiums
         for (const term of TERM_KEYS) {
           if (n >= term) continue;
           const survivingFace = V.gradedFace * termMixes[term] * blendedSurvival[n];
@@ -299,14 +385,13 @@ export default function EnterprisePnlPage() {
       let wlClaims = 0, annuityClaims = 0, gradedClaims = 0, totalClaimValue = 0;
       for (const V of vintages) {
         const n = Y - V.year;
-        if (n < 1) continue; // no deaths in year of issue (n=0)
+        if (n < 1) continue;
         const deathFrac = blendedDeathFrac[n];
         if (!deathFrac) continue;
 
         wlClaims += V.wlFace * deathFrac * 1.0;
         annuityClaims += V.annFace * deathFrac * Math.pow(1 + guaranteedRate / 100, n);
         gradedClaims += V.gradedFace * deathFrac * getGradedBenefitFactor(n);
-        // Actual payout values for FH margin (includes trust at face)
         totalClaimValue += V.wlFace * deathFrac
           + V.annFace * deathFrac * Math.pow(1 + guaranteedRate / 100, n)
           + V.gradedFace * deathFrac * getGradedBenefitFactor(n)
@@ -314,74 +399,128 @@ export default function EnterprisePnlPage() {
       }
       const claimsPaid = wlClaims + annuityClaims + gradedClaims;
 
-      // ── TJM LIFE P&L (1120-L mechanics) ──
+      // ── HEADCOUNT SCALING ──
+      const closerCount = Math.ceil(closerProduction / volumePerCloser);
+      const setterCount = Math.ceil(closerProduction / volumePerSetter);
+      const leaderCount = 1;
+      const totalHeadcount = closerCount + setterCount + aftercareCount + leaderCount;
 
-      // Gross income (1120-L uses total premiums collected)
+      // ── SALES TEAM COMPENSATION ──
+      // Modeling year for commission purposes: use min(Y, 3) so by year 3+ we include renewal commissions
+      const modelYear = Math.min(Y, 3);
+
+      // A. Closer comp (per closer)
+      const closerVolume = volumePerCloser; // each closer handles this volume
+      const setterPct = pctSetterSourced / 100;
+      const closerSplit = closerSplitPct / 100;
+      const closerDirectVolume = closerVolume * (1 - setterPct);
+      const closerSetterSourcedVolume = closerVolume * setterPct;
+      const closerDirectComm = calcGrossCommForVolume(closerDirectVolume, modelYear);
+      const closerSharedComm = calcGrossCommForVolume(closerSetterSourcedVolume, modelYear);
+      const closerGrossComm = closerDirectComm.grossComm + closerSharedComm.grossComm * closerSplit;
+      const closerChargebacks = closerGrossComm * (chargebackRate / 100);
+      const closerNetComm = closerGrossComm - closerChargebacks;
+      const closerBaseWage = closerHourlyWage * 40 * 52;
+      const closerMonthlyBonus = calcMonthlyBonusAnnual(closerVolume);
+      const closerAnnualBonus = calcAnnualBonus(closerVolume);
+      const closerCompEach = closerBaseWage + closerNetComm + closerMonthlyBonus + closerAnnualBonus;
+      const closerTotalCost = closerCompEach * closerCount;
+
+      // B. Setter comp (per setter)
+      // Each setter supports ~3 closers ($6M / $2M), earns split on setter-sourced volume
+      const setterSupportedVolume = volumePerSetter; // total closer volume a setter supports
+      const setterSplit = (100 - closerSplitPct) / 100;
+      const setterSourcedVolume = setterSupportedVolume * setterPct;
+      const setterSharedComm = calcGrossCommForVolume(setterSourcedVolume, modelYear);
+      const setterGrossComm = setterSharedComm.grossComm * setterSplit;
+      const setterChargebacks = setterGrossComm * (chargebackRate / 100);
+      const setterNetComm = setterGrossComm - setterChargebacks;
+      const setterBaseWage = setterHourlyWage * 40 * 52;
+      // Setters: base wage + commission split only, no bonuses
+      const setterCompEach = setterBaseWage + setterNetComm;
+      const setterTotalCost = setterCompEach * setterCount;
+
+      // C. Aftercare comp (per specialist)
+      const aftercareVolume = aftercareAnnualVolume;
+      const aftercareComm = calcGrossCommForVolume(aftercareVolume, modelYear);
+      const aftercareGrossComm = aftercareComm.grossComm;
+      const aftercareChargebacks = aftercareGrossComm * (chargebackRate / 100);
+      const aftercareNetComm = aftercareGrossComm - aftercareChargebacks;
+      // Aftercare split: specialist keeps their share of aftercare-lead portion
+      const aftercareLeadFrac = aftercareLeadPct / 100;
+      const aftercareSpecFrac = specialistShare / 100;
+      const aftercareEffectiveComm = aftercareNetComm * aftercareLeadFrac * aftercareSpecFrac
+        + aftercareNetComm * (1 - aftercareLeadFrac);
+      const aftercareBaseWage = aftercareHourlyWage * 40 * 52;
+      const aftercareMonthlyBonus = calcMonthlyBonusAnnual(aftercareVolume);
+      const aftercareAnnualBonusAmt = calcAnnualBonus(aftercareVolume);
+      const aftercareCompEach = aftercareBaseWage + aftercareEffectiveComm + aftercareMonthlyBonus + aftercareAnnualBonusAmt;
+      const aftercareTotalCost = aftercareCompEach * aftercareCount;
+
+      // D. Leader comp (on net volume after cemetery perpetual care)
+      const teamSalesVolume = closerCount * closerVolume + aftercareCount * aftercareVolume;
+      const teamNetVolume = teamSalesVolume * (1 - (cemeteryMix / 100) * (perpCareRate / 100));
+      const grossMonthlyOverride = teamNetVolume * 0.01;
+      const netMonthlyOverride = grossMonthlyOverride;
+      const leaderVolumePerPeriod = teamNetVolume / 2;
+      const leaderBonusPerPeriod = calcSemiAnnualBonus(leaderVolumePerPeriod);
+      const leaderAnnualSemiBonus = leaderBonusPerPeriod * 2;
+      const leaderTotalCost = leaderBaseSalary + netMonthlyOverride + leaderAnnualSemiBonus;
+
+      // E. Total sales comp
+      const totalSalesComp = closerTotalCost + setterTotalCost + aftercareTotalCost + leaderTotalCost;
+
+      // ── ENTITY SPLIT (based on commissionable bases, not raw face) ──
+      const cemeteryCommBase = cemeteryFace * (1 - perpCareRate / 100);
+      const totalCommBase = insuranceFace + cemeteryCommBase;
+      const cemeteryShare = totalCommBase > 0 ? cemeteryCommBase / totalCommBase : 0;
+      const insuranceShare = 1 - cemeteryShare;
+      const tjmShareOfInsurance = (prodMixes.wl + prodMixes.annuity + prodMixes.graded);
+      const fhShareOfInsurance = prodMixes.trust;
+      const fieldSalesComp = totalSalesComp - aftercareTotalCost;
+      const cemeteryComp = fieldSalesComp * cemeteryShare;
+      const tjmLifeComp = fieldSalesComp * insuranceShare * tjmShareOfInsurance;
+      const fhComp = fieldSalesComp * insuranceShare * fhShareOfInsurance + aftercareTotalCost;
+
+      // ── TJM LIFE P&L (1120-L mechanics) ──
       const investmentIncome = priorReserves * (earnRate / 100);
       const grossIncome = investmentIncome + totalPremiums;
 
-      // Reserves use NET premiums (loading stays with TJM Life as revenue)
-      // Annuity premiums have no loading (single-pay = face value)
       const netPremiumsToReserves = annuityPremiums + multiPayNetPremiums;
       const reserves = priorReserves + netPremiumsToReserves + investmentIncome - claimsPaid;
       const reserveChange = reserves - priorReserves;
-      const section807 = reserveChange; // §807: positive = deduction, negative = income inclusion
+      const section807 = reserveChange;
 
-      // Operating expenses
-      let commissions = 0;
-      commissions += (wlFace + gradedFace) * commYr1;
-      commissions += annFace * singlePayCommRate;
-      if (Y >= 2) {
-        const v1 = vintages.find(v => v.year === Y - 1);
-        if (v1) commissions += (v1.wlFace + v1.gradedFace) * commYr2;
-      }
-      if (Y >= 3) {
-        const v2 = vintages.find(v => v.year === Y - 2);
-        if (v2) commissions += (v2.wlFace + v2.gradedFace) * commYr3;
-      }
-      commissions *= (1 - chargebackRate / 100);
-
-      const adminCosts = baseAdminCost * Math.pow(1 + adminGrowthRate / 100, Y - 1);
       const premTax = multiPayPremiums * (premiumTaxRate / 100);
 
-      // 1120-L tax calculation
-      const totalDeductions = section807 + claimsPaid + commissions + adminCosts + premTax;
+      // 1120-L tax calculation — tjmLifeComp replaces old commissions + adminCosts
+      const totalDeductions = section807 + claimsPaid + tjmLifeComp + premTax;
       const taxableIncome = grossIncome - totalDeductions;
       const taxPaid = Math.max(0, taxableIncome) * (corporateTaxRate / 100);
       const effectiveRate = grossIncome > 0 ? (taxPaid / grossIncome) * 100 : 0;
 
-      // TJM Life Net: investment income + premium loading - operating costs - tax
-      // Loading funds commissions; investment income funds long-term profit
-      // When taxable income < 0: tjmNet = taxable income (no tax, §807 shelters)
-      // When taxable income > 0: tjmNet = taxable income × (1 - 21%)
-      const tjmNet = investmentIncome + premiumLoading - commissions - adminCosts - premTax - taxPaid;
+      const tjmNet = investmentIncome + premiumLoading - tjmLifeComp - premTax - taxPaid;
 
       // ── FUNERAL HOME P&L ──
       const atNeedMargin = totalClaimValue * (1 - serviceDeliveryCost / 100);
 
-      // Finance charge income: trust contracts in-force during payment term
       let financeChargeBase = 0;
       for (const V of vintages) {
         const n = Y - V.year;
-        if (n >= avgPayTerm) continue; // past payment term
+        if (n >= avgPayTerm) continue;
         financeChargeBase += V.trustFace * blendedSurvival[n];
       }
       const financeChargeIncome = financeChargeBase * (financeChargeRate / 100);
 
-      // Guaranteed rate growth is captured in annuity claims: face * (1 + guaranteedRate%)^years
-      // No separate annual FH line — it becomes FH income at claim via the larger death benefit
+      const fhTax = financeChargeIncome * (passThroughTaxRate / 100);
+      const fhNet = atNeedMargin + financeChargeIncome - fhTax - fhComp;
 
       // ── CEMETERY P&L ──
       const cemeteryGrossProfit = cemeteryFace * (cemeteryMargin / 100);
       const cemeteryPerpCare = cemeteryFace * (perpCareRate / 100);
-      const cemeteryComm = (cemeteryFace - cemeteryPerpCare) * (cemeteryCommRate / 100);
-      const cemeteryPreTax = cemeteryGrossProfit - cemeteryPerpCare - cemeteryComm;
+      const cemeteryPreTax = cemeteryGrossProfit - cemeteryPerpCare - cemeteryComp;
       const cemeteryTax = cemeteryPreTax * (passThroughTaxRate / 100);
       const cemeteryNet = cemeteryPreTax - cemeteryTax;
-
-      const trustComm = trustFace * trustCommRate;
-      const fhTax = financeChargeIncome * (passThroughTaxRate / 100);
-      const fhNet = atNeedMargin + financeChargeIncome - fhTax - trustComm;
 
       // ── COMBINED ──
       const combinedNet = tjmNet + fhNet + cemeteryNet;
@@ -399,11 +538,13 @@ export default function EnterprisePnlPage() {
         reserves,
         investmentIncome,
         grossIncome,
-        commissions,
+        salesComp: totalSalesComp,
+        tjmLifeComp,
+        cemeteryComp,
+        fhComp,
         claimsPaid,
         reserveChange,
         section807,
-        adminCosts,
         premiumTax: premTax,
         totalDeductions,
         taxableIncome,
@@ -421,6 +562,23 @@ export default function EnterprisePnlPage() {
         cumulativeTotal,
         cumulativeTJM,
         cumulativeFH,
+        // Headcount
+        closerCount,
+        setterCount,
+        aftercareCount: aftercareCount,
+        leaderCount,
+        totalHeadcount,
+        // Per-role comp
+        closerTotalCost,
+        setterTotalCost,
+        aftercareTotalCost,
+        leaderTotalCost,
+        // Entity revenue
+        tjmRevenue: investmentIncome + premiumLoading,
+        cemeteryRevenue: cemeteryGrossProfit - cemeteryPerpCare,
+        fhRevenue: atNeedMargin + financeChargeIncome,
+        // Comp ratios
+        compToRevenuePct: newFace > 0 ? (totalSalesComp / newFace) * 100 : 0,
       });
 
       priorReserves = reserves;
@@ -431,11 +589,16 @@ export default function EnterprisePnlPage() {
     initialProduction, growthRate, projectionYears, startYear,
     mixWL, mixAnnuity, mixGraded, mixTrust,
     mix3Pay, mix5Pay, mix10Pay, mix20Pay,
-    mixAge40_60, mixAge61_65, mixAge66_70, mixAge71_75, mixAge76_80, mixAge81_85,
+    mixAge40_60, mixAge61_65, mixAge66_70, mixAge71_75, mixAge76_80, mixAge81_85, mixAge86_90,
     earnRate, guaranteedRate,
     financeChargeRate, passThroughTaxRate, premiumTaxRate, corporateTaxRate,
-    serviceDeliveryCost, baseAdminCost, adminGrowthRate, chargebackRate,
-    cemeteryMix, perpCareRate, cemeteryMargin, cemeteryCommRate,
+    serviceDeliveryCost, chargebackRate,
+    volumePerCloser, volumePerSetter, productionPerAftercare,
+    closerHourlyWage, setterHourlyWage, aftercareHourlyWage,
+    leaderBaseSalary,
+    pctSetterSourced, closerSplitPct, aftercareAnnualVolume,
+    aftercareLeadPct, specialistShare,
+    cemeteryMix, perpCareRate, cemeteryMargin,
   ]);
 
   const { yearData } = projection;
@@ -449,6 +612,30 @@ export default function EnterprisePnlPage() {
     fhNet: d.fhNet,
     combinedNet: d.combinedNet,
   }));
+
+  const compHealthChartData = yearData.map(d => ({
+    year: d.calendarYear,
+    closerCost: d.closerTotalCost,
+    setterCost: d.setterTotalCost,
+    aftercareCost: d.aftercareTotalCost,
+    leaderCost: d.leaderTotalCost,
+    combinedNet: d.combinedNet,
+    compToRevenuePct: d.compToRevenuePct,
+    revenuePerHead: d.newProduction / d.totalHeadcount,
+    compPerHead: d.salesComp / d.totalHeadcount,
+    tjmRevenue: d.tjmRevenue,
+    tjmComp: d.tjmLifeComp,
+    tjmNet: d.tjmNet,
+    cemeteryRevenue: d.cemeteryRevenue,
+    cemeteryComp: d.cemeteryComp,
+    cemeteryNet: d.cemeteryNet,
+    fhRevenue: d.fhRevenue,
+    fhComp: d.fhComp,
+    fhNet: d.fhNet,
+  }));
+
+  const yr1 = yearData[0];
+  const yrN = yearData[yearData.length - 1];
 
   return (
     <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 space-y-6">
@@ -493,9 +680,10 @@ export default function EnterprisePnlPage() {
               <span className="text-xs font-semibold text-navy-600 uppercase tracking-wide block mb-2">Cemetery</span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <InputGroup label="Cemetery Mix"><NumberInput value={cemeteryMix} onChange={setCemeteryMix} min={0} max={100} step={1} suffix="%" /></InputGroup>
-                <InputGroup label="Perpetual Care"><NumberInput value={perpCareRate} onChange={setPerpCareRate} min={0} max={25} step={1} suffix="%" /></InputGroup>
+                <InputGroup label="Perpetual Care">
+                  <div className="w-full rounded-lg border border-navy-200 bg-navy-50 px-3 py-2 text-sm text-navy-500">{perpCareRate}%</div>
+                </InputGroup>
                 <InputGroup label="Cemetery Margin"><NumberInput value={cemeteryMargin} onChange={setCemeteryMargin} min={0} max={100} step={1} suffix="%" /></InputGroup>
-                <InputGroup label="Cemetery Commission"><NumberInput value={cemeteryCommRate} onChange={setCemeteryCommRate} min={0} max={20} step={0.5} suffix="%" /></InputGroup>
               </div>
             </div>
 
@@ -531,15 +719,16 @@ export default function EnterprisePnlPage() {
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-xs font-semibold text-navy-600 uppercase tracking-wide">Age Distribution</span>
-                <SumBadge values={[mixAge40_60, mixAge61_65, mixAge66_70, mixAge71_75, mixAge76_80, mixAge81_85]} label="Sum" />
+                <SumBadge values={[mixAge40_60, mixAge61_65, mixAge66_70, mixAge71_75, mixAge76_80, mixAge81_85, mixAge86_90]} label="Sum" />
               </div>
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
+              <div className="grid grid-cols-4 sm:grid-cols-7 gap-4">
                 <InputGroup label="40-60"><NumberInput value={mixAge40_60} onChange={setMixAge40_60} min={0} max={100} step={1} suffix="%" /></InputGroup>
                 <InputGroup label="61-65"><NumberInput value={mixAge61_65} onChange={setMixAge61_65} min={0} max={100} step={1} suffix="%" /></InputGroup>
                 <InputGroup label="66-70"><NumberInput value={mixAge66_70} onChange={setMixAge66_70} min={0} max={100} step={1} suffix="%" /></InputGroup>
                 <InputGroup label="71-75"><NumberInput value={mixAge71_75} onChange={setMixAge71_75} min={0} max={100} step={1} suffix="%" /></InputGroup>
                 <InputGroup label="76-80"><NumberInput value={mixAge76_80} onChange={setMixAge76_80} min={0} max={100} step={1} suffix="%" /></InputGroup>
                 <InputGroup label="81-85"><NumberInput value={mixAge81_85} onChange={setMixAge81_85} min={0} max={100} step={1} suffix="%" /></InputGroup>
+                <InputGroup label="86-90"><NumberInput value={mixAge86_90} onChange={setMixAge86_90} min={0} max={100} step={1} suffix="%" /></InputGroup>
               </div>
             </div>
 
@@ -561,10 +750,86 @@ export default function EnterprisePnlPage() {
               <span className="text-xs font-semibold text-navy-600 uppercase tracking-wide block mb-2">Operating Assumptions</span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <InputGroup label="FH Service Cost (% of face)"><NumberInput value={serviceDeliveryCost} onChange={setServiceDeliveryCost} min={0} max={100} step={1} suffix="%" /></InputGroup>
-                <InputGroup label="Base Admin Cost"><NumberInput value={baseAdminCost} onChange={setBaseAdminCost} min={0} step={10000} prefix="$" /></InputGroup>
-                <InputGroup label="Admin Growth Rate"><NumberInput value={adminGrowthRate} onChange={setAdminGrowthRate} min={0} max={20} step={0.5} suffix="%" /></InputGroup>
                 <InputGroup label="Chargeback Rate"><NumberInput value={chargebackRate} onChange={setChargebackRate} min={0} max={50} step={0.5} suffix="%" /></InputGroup>
               </div>
+            </div>
+
+            {/* Row 7: Sales Team Scaling */}
+            <div>
+              <span className="text-xs font-semibold text-navy-600 uppercase tracking-wide block mb-2">Sales Team Scaling</span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <InputGroup label="Volume per Closer"><NumberInput value={volumePerCloser} onChange={setVolumePerCloser} min={500000} step={500000} prefix="$" /></InputGroup>
+                <InputGroup label="Volume per Setter"><NumberInput value={volumePerSetter} onChange={setVolumePerSetter} min={1000000} step={1000000} prefix="$" /></InputGroup>
+                <InputGroup label="Prod. per Aftercare"><NumberInput value={productionPerAftercare} onChange={setProductionPerAftercare} min={1000000} step={1000000} prefix="$" /></InputGroup>
+                <InputGroup label="Leader (fixed)">
+                  <div className="w-full rounded-lg border border-navy-200 bg-navy-50 px-3 py-2 text-sm text-navy-500">1</div>
+                </InputGroup>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-3">
+                <InputGroup label="Closer Hourly Wage"><NumberInput value={closerHourlyWage} onChange={setCloserHourlyWage} min={0} max={50} step={0.50} prefix="$" /></InputGroup>
+                <InputGroup label="Setter Hourly Wage"><NumberInput value={setterHourlyWage} onChange={setSetterHourlyWage} min={0} max={50} step={0.50} prefix="$" /></InputGroup>
+                <InputGroup label="Aftercare Hourly Wage"><NumberInput value={aftercareHourlyWage} onChange={setAftercareHourlyWage} min={0} max={50} step={0.50} prefix="$" /></InputGroup>
+                <InputGroup label="Leader Base Salary"><NumberInput value={leaderBaseSalary} onChange={setLeaderBaseSalary} min={0} step={5000} prefix="$" /></InputGroup>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-3">
+                <InputGroup label="% Setter-Sourced"><NumberInput value={pctSetterSourced} onChange={setPctSetterSourced} min={0} max={100} step={5} suffix="%" /></InputGroup>
+                <InputGroup label="Closer Split %"><NumberInput value={closerSplitPct} onChange={setCloserSplitPct} min={0} max={100} step={5} suffix="%" /></InputGroup>
+                <InputGroup label="Aftercare Volume"><NumberInput value={aftercareAnnualVolume} onChange={setAftercareAnnualVolume} min={0} step={100000} prefix="$" /></InputGroup>
+              </div>
+
+              {/* Hiring Rules Callout */}
+              {(() => {
+                const yr1 = yearData[0];
+                const yrN = yearData[yearData.length - 1];
+                if (!yr1 || !yrN) return null;
+                return (
+                  <div className="mt-4 bg-navy-50 border border-navy-200 rounded-lg p-4">
+                    <h4 className="text-xs font-bold text-navy-700 uppercase tracking-wide mb-3">Hiring Rules</h4>
+                    <table className="w-full text-xs text-navy-600">
+                      <thead>
+                        <tr className="border-b-2 border-navy-200">
+                          <th className="py-1.5 text-left font-semibold text-navy-700 w-1/4">Role</th>
+                          <th className="py-1.5 text-left font-semibold text-navy-700">Rule</th>
+                          <th className="py-1.5 text-center font-semibold text-navy-700 w-1/6">Year 1</th>
+                          <th className="py-1.5 text-center font-semibold text-navy-700 w-1/6">Year {yearData.length}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="border-b border-navy-100">
+                          <td className="py-2 font-semibold text-navy-700">Closers</td>
+                          <td className="py-2">1 per {fmtLarge(volumePerCloser)} closer production (rounded up)</td>
+                          <td className="py-2 text-center font-bold text-navy-800">{yr1.closerCount}</td>
+                          <td className="py-2 text-center font-bold text-navy-800">{yrN.closerCount}</td>
+                        </tr>
+                        <tr className="border-b border-navy-100">
+                          <td className="py-2 font-semibold text-navy-700">Setters</td>
+                          <td className="py-2">1 per {fmtLarge(volumePerSetter)} closer production (rounded up)</td>
+                          <td className="py-2 text-center font-bold text-navy-800">{yr1.setterCount}</td>
+                          <td className="py-2 text-center font-bold text-navy-800">{yrN.setterCount}</td>
+                        </tr>
+                        <tr className="border-b border-navy-100">
+                          <td className="py-2 font-semibold text-navy-700">Aftercare</td>
+                          <td className="py-2">1 per {fmtLarge(productionPerAftercare)} total production (rounded down, min 1)</td>
+                          <td className="py-2 text-center font-bold text-navy-800">{yr1.aftercareCount}</td>
+                          <td className="py-2 text-center font-bold text-navy-800">{yrN.aftercareCount}</td>
+                        </tr>
+                        <tr className="border-b border-navy-200">
+                          <td className="py-2 font-semibold text-navy-700">Sales Leader</td>
+                          <td className="py-2">Fixed &mdash; always 1</td>
+                          <td className="py-2 text-center font-bold text-navy-800">{yr1.leaderCount}</td>
+                          <td className="py-2 text-center font-bold text-navy-800">{yrN.leaderCount}</td>
+                        </tr>
+                        <tr className="bg-navy-100">
+                          <td className="py-2 font-bold text-navy-800">Total</td>
+                          <td className="py-2 text-navy-500">Production: {fmtLarge(yr1.newProduction)} &rarr; {fmtLarge(yrN.newProduction)} ({growthRate}%/yr)</td>
+                          <td className="py-2 text-center font-bold text-navy-900 text-sm">{yr1.totalHeadcount}</td>
+                          <td className="py-2 text-center font-bold text-navy-900 text-sm">{yrN.totalHeadcount}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex justify-end">
@@ -602,10 +867,166 @@ export default function EnterprisePnlPage() {
               <Bar dataKey="tjmNet" name="TJM Life Net" stackId="net" fill="#2dd4bf" />
               <Bar dataKey="cemeteryNet" name="Cemetery Net" stackId="net" fill="#0891b2" />
               <Bar dataKey="fhNet" name="FH Net" stackId="net" fill="#27ab83" />
-              <Line type="monotone" dataKey="combinedNet" name="Combined Net" stroke="#ffffff" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="combinedNet" name="Combined Profit" stroke="#ffffff" strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
+      </section>
+
+      {/* ── Section 4: Compensation Health Analysis ── */}
+      <section className="bg-white rounded-xl shadow-sm border border-navy-100">
+        <button onClick={() => setCompHealthOpen(!compHealthOpen)} className="w-full flex items-center justify-between px-6 py-4">
+          <h3 className="text-sm font-bold text-navy-700 uppercase tracking-wide">Compensation Health Analysis</h3>
+          <Chevron open={compHealthOpen} />
+        </button>
+        {compHealthOpen && yr1 && yrN && (
+          <div className="px-6 pb-6 space-y-6">
+            {/* ── KPI Delta Cards ── */}
+            {(() => {
+              const totalComp = yearData.reduce((s, d) => s + d.salesComp, 0);
+              const totalProd = yearData.reduce((s, d) => s + d.newProduction, 0);
+              const avgCompPct = totalProd > 0 ? totalComp / totalProd : 0;
+              const avgHealthy = avgCompPct < 0.15;
+              const kpis = [
+                {
+                  label: 'Comp / Production',
+                  v1: yr1.salesComp / yr1.newProduction,
+                  vN: yrN.salesComp / yrN.newProduction,
+                  fmt: v => fmtPct(v * 100),
+                  lowerBetter: true,
+                },
+                {
+                  label: 'Avg Comp / Production',
+                  v1: avgCompPct,
+                  vN: null,
+                  fmt: v => fmtPct(v * 100),
+                  lowerBetter: true,
+                  threshold: true,
+                },
+                {
+                  label: 'Profit / Production',
+                  v1: yr1.newProduction > 0 ? yr1.combinedNet / yr1.newProduction : 0,
+                  vN: yrN.newProduction > 0 ? yrN.combinedNet / yrN.newProduction : 0,
+                  fmt: v => fmtPct(v * 100),
+                  lowerBetter: false,
+                  sublabel: `${fmtLarge(yr1.combinedNet)} / ${fmtLarge(yr1.newProduction)} \u2192 ${fmtLarge(yrN.combinedNet)} / ${fmtLarge(yrN.newProduction)}`,
+                },
+                {
+                  label: 'Net per Head',
+                  v1: yr1.combinedNet / yr1.totalHeadcount,
+                  vN: yrN.combinedNet / yrN.totalHeadcount,
+                  fmt: v => fmtLarge(v),
+                  lowerBetter: false,
+                },
+                {
+                  label: 'Total Headcount',
+                  v1: yr1.totalHeadcount,
+                  vN: yrN.totalHeadcount,
+                  fmt: v => String(v),
+                  lowerBetter: false,
+                  neutral: true,
+                },
+              ];
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                  {kpis.map(k => {
+                    const improving = k.neutral || k.threshold ? null : k.lowerBetter ? k.vN < k.v1 : k.vN > k.v1;
+                    return (
+                      <div key={k.label} className="bg-navy-50 rounded-lg p-3 border border-navy-100">
+                        <p className="text-[10px] font-semibold text-navy-500 uppercase tracking-wide">{k.label}</p>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <span className="text-lg font-bold text-navy-800">{k.fmt(k.v1)}</span>
+                          {k.threshold && (
+                            <span className={`text-xs font-semibold ${avgHealthy ? 'text-green-600' : 'text-red-600'}`}>
+                              {avgHealthy ? '< 15% \u2714' : '\u2265 15% \u26A0'}
+                            </span>
+                          )}
+                          {!k.neutral && !k.threshold && k.vN != null && (
+                            <span className={`text-xs font-semibold ${improving ? 'text-green-600' : 'text-red-600'}`}>
+                              {improving ? '\u2193' : '\u2191'} {k.fmt(k.vN)}
+                            </span>
+                          )}
+                          {k.neutral && (
+                            <span className="text-xs font-semibold text-navy-500">
+                              {'\u2192'} {k.fmt(k.vN)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-navy-400 mt-0.5">{k.threshold ? `${yearData.length}-year average` : `Yr 1 \u2192 Yr ${yearData.length}`}</p>
+                        {k.sublabel && <p className="text-[10px] text-navy-400">{k.sublabel}</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {/* ── Chart 2: Comp by Role vs Net Income ── */}
+            <div>
+              <h4 className="text-xs font-semibold text-navy-600 uppercase tracking-wide mb-2">Compensation by Role vs. Combined Profit</h4>
+              <div className="bg-navy-900 rounded-lg p-4">
+                <div className="h-[350px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={compHealthChartData} margin={{ top: 10, right: 30, left: 20, bottom: 10 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#243b53" />
+                      <XAxis dataKey="year" stroke="#9fb3c8" tick={{ fontSize: 11 }} />
+                      <YAxis tickFormatter={fmtLarge} stroke="#9fb3c8" tick={{ fontSize: 11 }} />
+                      <Tooltip content={<ChartTooltip />} />
+                      <Legend wrapperStyle={{ fontSize: 11, color: '#d9e2ec' }} />
+                      <Bar dataKey="closerCost" name="Closer" stackId="role" fill="#2563eb" />
+                      <Bar dataKey="setterCost" name="Setter" stackId="role" fill="#7c3aed" />
+                      <Bar dataKey="aftercareCost" name="Aftercare" stackId="role" fill="#059669" />
+                      <Bar dataKey="leaderCost" name="Leader" stackId="role" fill="#0891b2" />
+                      <Line type="monotone" dataKey="combinedNet" name="Combined Profit" stroke="#ffffff" strokeWidth={2} dot={false} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Chart 3: Ratio + Per-Head (side by side) ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Chart 3L: Comp/Production % */}
+              <div>
+                <h4 className="text-xs font-semibold text-navy-600 uppercase tracking-wide mb-2">Comp / Production %</h4>
+                <div className="bg-navy-900 rounded-lg p-4">
+                  <div className="h-[280px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={compHealthChartData} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#243b53" />
+                        <XAxis dataKey="year" stroke="#9fb3c8" tick={{ fontSize: 11 }} />
+                        <YAxis unit="%" stroke="#9fb3c8" tick={{ fontSize: 11 }} />
+                        <Tooltip formatter={(v) => fmtPct(v)} labelFormatter={(l) => `Year ${l}`} contentStyle={{ backgroundColor: '#102a43', border: '1px solid #334e68', borderRadius: '8px', fontSize: 12 }} />
+                        <ReferenceLine y={12} stroke="#27ab83" strokeDasharray="6 3" label={{ value: 'Target 12%', position: 'right', fill: '#27ab83', fontSize: 10 }} />
+                        <ReferenceLine y={18} stroke="#ef4444" strokeDasharray="6 3" label={{ value: 'Warning 18%', position: 'right', fill: '#ef4444', fontSize: 10 }} />
+                        <Line type="monotone" dataKey="compToRevenuePct" name="Comp/Production %" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3, fill: '#f59e0b' }} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+              {/* Chart 3R: Revenue vs Comp per Head */}
+              <div>
+                <h4 className="text-xs font-semibold text-navy-600 uppercase tracking-wide mb-2">Revenue vs. Comp per Head</h4>
+                <div className="bg-navy-900 rounded-lg p-4">
+                  <div className="h-[280px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={compHealthChartData} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#243b53" />
+                        <XAxis dataKey="year" stroke="#9fb3c8" tick={{ fontSize: 11 }} />
+                        <YAxis tickFormatter={fmtLarge} stroke="#9fb3c8" tick={{ fontSize: 11 }} />
+                        <Tooltip content={<ChartTooltip />} />
+                        <Legend wrapperStyle={{ fontSize: 11, color: '#d9e2ec' }} />
+                        <Line type="monotone" dataKey="revenuePerHead" name="Revenue / Head" stroke="#2dd4bf" strokeWidth={2} dot={{ r: 3, fill: '#2dd4bf' }} />
+                        <Line type="monotone" dataKey="compPerHead" name="Comp / Head" stroke="#ef4444" strokeWidth={2} dot={{ r: 3, fill: '#ef4444' }} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ── Projection Table (shared renderer) ── */}
@@ -620,8 +1041,7 @@ export default function EnterprisePnlPage() {
             totalDeductions: acc.totalDeductions + d.totalDeductions,
             section807: acc.section807 + d.section807,
             claimsPaid: acc.claimsPaid + d.claimsPaid,
-            commissions: acc.commissions + d.commissions,
-            adminCosts: acc.adminCosts + d.adminCosts,
+            salesComp: acc.salesComp + d.salesComp,
             premiumTax: acc.premiumTax + d.premiumTax,
             taxableIncome: acc.taxableIncome + d.taxableIncome,
             taxPaid: acc.taxPaid + d.taxPaid,
@@ -631,8 +1051,8 @@ export default function EnterprisePnlPage() {
             combinedNet: acc.combinedNet + d.combinedNet,
           }), {
             newProduction: 0, grossIncome: 0, investmentIncome: 0, totalPremiums: 0,
-            premiumLoading: 0, totalDeductions: 0, section807: 0, claimsPaid: 0, commissions: 0,
-            adminCosts: 0, premiumTax: 0, taxableIncome: 0, taxPaid: 0,
+            premiumLoading: 0, totalDeductions: 0, section807: 0, claimsPaid: 0, salesComp: 0,
+            premiumTax: 0, taxableIncome: 0, taxPaid: 0,
             tjmNet: 0, cemeteryNet: 0, fhNet: 0, combinedNet: 0,
           });
 
@@ -642,6 +1062,7 @@ export default function EnterprisePnlPage() {
                 <tr className="bg-navy-100 text-navy-700">
                   <th className="px-3 py-2 text-left font-semibold sticky left-0 bg-navy-100 z-10">Year</th>
                   <th className="px-3 py-2 text-right font-semibold">New Prod.</th>
+                  {detail && <th className="px-3 py-2 text-right font-semibold text-navy-500">Team</th>}
                   <th className="px-3 py-2 text-right font-semibold">In-Force</th>
                   <th className="px-3 py-2 text-right font-semibold">Reserves</th>
                   <th className="px-3 py-2 text-right font-semibold">Gross Income</th>
@@ -651,8 +1072,8 @@ export default function EnterprisePnlPage() {
                   <th className="px-3 py-2 text-right font-semibold">Deductions</th>
                   {detail && <th className="px-3 py-2 text-right font-semibold text-navy-500">&sect;807</th>}
                   {detail && <th className="px-3 py-2 text-right font-semibold text-navy-500">Claims</th>}
-                  {detail && <th className="px-3 py-2 text-right font-semibold text-navy-500">Commissions</th>}
-                  {detail && <th className="px-3 py-2 text-right font-semibold text-navy-500">Admin</th>}
+                  {detail && <th className="px-3 py-2 text-right font-semibold text-navy-500">Sales Comp</th>}
+                  {detail && <th className="px-3 py-2 text-right font-semibold text-navy-500">Comp/Rev</th>}
                   {detail && <th className="px-3 py-2 text-right font-semibold text-navy-500">Prem. Tax</th>}
                   <th className="px-3 py-2 text-right font-semibold">Taxable Inc.</th>
                   <th className="px-3 py-2 text-right font-semibold">Tax Paid</th>
@@ -670,6 +1091,7 @@ export default function EnterprisePnlPage() {
                       {d.calendarYear}
                     </td>
                     <td className="px-3 py-1.5 text-right text-navy-800">{fmtLarge(d.newProduction)}</td>
+                    {detail && <td className="px-3 py-1.5 text-right text-navy-600" title={`${d.closerCount}C ${d.setterCount}S ${d.aftercareCount}A 1L`}>{d.totalHeadcount}</td>}
                     <td className="px-3 py-1.5 text-right text-navy-800">{fmtLarge(d.inForce)}</td>
                     <td className="px-3 py-1.5 text-right text-navy-800">{fmtLarge(d.reserves)}</td>
                     <td className="px-3 py-1.5 text-right text-navy-800">{fmtLarge(d.grossIncome)}</td>
@@ -679,8 +1101,8 @@ export default function EnterprisePnlPage() {
                     <td className="px-3 py-1.5 text-right text-navy-800">{fmtLarge(d.totalDeductions)}</td>
                     {detail && <td className="px-3 py-1.5 text-right text-navy-600">{fmtLarge(d.section807)}</td>}
                     {detail && <td className="px-3 py-1.5 text-right text-navy-600">{fmtLarge(d.claimsPaid)}</td>}
-                    {detail && <td className="px-3 py-1.5 text-right text-navy-600">{fmtLarge(d.commissions)}</td>}
-                    {detail && <td className="px-3 py-1.5 text-right text-navy-600">{fmtLarge(d.adminCosts)}</td>}
+                    {detail && <td className="px-3 py-1.5 text-right text-navy-600">{fmtLarge(d.salesComp)}</td>}
+                    {detail && <td className={`px-3 py-1.5 text-right font-semibold ${d.compToRevenuePct > 18 ? 'text-red-600' : d.compToRevenuePct > 12 ? 'text-amber-600' : 'text-navy-600'}`}>{fmtPct(d.compToRevenuePct)}</td>}
                     {detail && <td className="px-3 py-1.5 text-right text-navy-600">{fmtLarge(d.premiumTax)}</td>}
                     <td className={`px-3 py-1.5 text-right ${d.taxableIncome < 0 ? 'text-red-600' : 'text-navy-800'}`}>{fmtLarge(d.taxableIncome)}</td>
                     <td className="px-3 py-1.5 text-right text-navy-800">{fmtLarge(d.taxPaid)}</td>
@@ -695,6 +1117,7 @@ export default function EnterprisePnlPage() {
                   <tr className="bg-navy-200 font-bold border-t-2 border-navy-400">
                     <td className="px-3 py-2 text-navy-800 sticky left-0 bg-navy-200 z-10">TOTAL</td>
                     <td className="px-3 py-2 text-right text-navy-800">{fmtLarge(totals.newProduction)}</td>
+                    {detail && <td className="px-3 py-2 text-right text-navy-500">{'\u2014'}</td>}
                     <td className="px-3 py-2 text-right text-navy-500">{'\u2014'}</td>
                     <td className="px-3 py-2 text-right text-navy-500">{'\u2014'}</td>
                     <td className="px-3 py-2 text-right text-navy-800">{fmtLarge(totals.grossIncome)}</td>
@@ -704,8 +1127,8 @@ export default function EnterprisePnlPage() {
                     <td className="px-3 py-2 text-right text-navy-800">{fmtLarge(totals.totalDeductions)}</td>
                     {detail && <td className="px-3 py-2 text-right text-navy-800">{fmtLarge(totals.section807)}</td>}
                     {detail && <td className="px-3 py-2 text-right text-navy-800">{fmtLarge(totals.claimsPaid)}</td>}
-                    {detail && <td className="px-3 py-2 text-right text-navy-800">{fmtLarge(totals.commissions)}</td>}
-                    {detail && <td className="px-3 py-2 text-right text-navy-800">{fmtLarge(totals.adminCosts)}</td>}
+                    {detail && <td className="px-3 py-2 text-right text-navy-800">{fmtLarge(totals.salesComp)}</td>}
+                    {detail && <td className="px-3 py-2 text-right text-navy-800">{totals.newProduction > 0 ? fmtPct((totals.salesComp / totals.newProduction) * 100) : '\u2014'}</td>}
                     {detail && <td className="px-3 py-2 text-right text-navy-800">{fmtLarge(totals.premiumTax)}</td>}
                     <td className={`px-3 py-2 text-right ${totals.taxableIncome < 0 ? 'text-red-600' : 'text-navy-800'}`}>{fmtLarge(totals.taxableIncome)}</td>
                     <td className="px-3 py-2 text-right text-navy-800">{fmtLarge(totals.taxPaid)}</td>
@@ -744,11 +1167,11 @@ export default function EnterprisePnlPage() {
               </div>
               <div className="px-6 py-3 bg-navy-50 border-b border-navy-100">
                 <p className="text-xs text-navy-600 leading-relaxed">
-                  TJM Life Net = investment income + premium loading &minus; operating costs &minus; tax.
-                  Premium loading (gross premiums &minus; actuarial cost) is TJM Life revenue that funds commissions and profit; only the net premium portion flows into reserves.
-                  Tax follows 1120-L mechanics: gross income &minus; deductions (&sect;807, claims, operating costs) = taxable income &times; 21%.
-                  Negative taxable income means &sect;807 fully shelters income &mdash; no federal tax owed. May generate NOL carryforwards.
-                  Tax Rate shows tax paid as a percentage of gross income &mdash; typically well under 21% because the &sect;807 reserve deduction shelters most income during growth years.
+                  TJM Life Net = investment income + premium loading &minus; sales comp (insurance portion) &minus; tax.
+                  Sales Comp includes base wages, commissions, monthly/annual bonuses, and leader comp &mdash; scaled by headcount which grows with production.
+                  Comp is split by entity: insurance products &rarr; TJM Life, trust/aftercare &rarr; FH, cemetery &rarr; Cemetery.
+                  Tax follows 1120-L mechanics: gross income &minus; deductions (&sect;807, claims, sales comp) = taxable income &times; 21%.
+                  Negative taxable income means &sect;807 fully shelters income. Team column shows headcount (hover for breakdown).
                 </p>
               </div>
               <div className="overflow-x-auto">
