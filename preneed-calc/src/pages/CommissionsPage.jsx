@@ -34,8 +34,14 @@ const DEFAULTS = {
 /* ─── Calculations ─── */
 function calcGrossCommission(annualFaceValue, s, simplified = false) {
   if (simplified) {
-    const grossComm = annualFaceValue * 0.075;
-    return { preneedYr1: grossComm, preneedYr2: 0, preneedYr3: 0, totalPreneed: grossComm, cemeteryComm: 0, trustComm: 0, terminalComm: 0, grossComm };
+    // 7.5% flat but cemetery property (70%) still has 15% perp care pulled out first
+    const cemVolume = annualFaceValue * (s.mixCemetery / 100);
+    const nonCemComm = (annualFaceValue - cemVolume) * 0.075;
+    const propertyComm = cemVolume * 0.70 * 0.85 * 0.075;
+    const markerComm = cemVolume * 0.30 * 0.075;
+    const cemeteryComm = propertyComm + markerComm;
+    const grossComm = nonCemComm + cemeteryComm;
+    return { preneedYr1: nonCemComm, preneedYr2: 0, preneedYr3: 0, totalPreneed: nonCemComm, cemeteryComm, trustComm: 0, terminalComm: 0, grossComm };
   }
 
   const termMixes = { single: s.mixSinglePay, '3pay': s.mix3Pay, '5pay': s.mix5Pay, '10pay': s.mix10Pay, '20pay': s.mix20Pay };
@@ -56,7 +62,11 @@ function calcGrossCommission(annualFaceValue, s, simplified = false) {
     }
   }
 
-  const cemeteryComm = annualFaceValue * (s.mixCemetery / 100) * 0.85 * 0.075; // after 15% perpetual care
+  // Cemetery: 70% property (15% perp care), 30% markers (no perp care)
+  const cemeteryVolume = annualFaceValue * (s.mixCemetery / 100);
+  const propertyComm = cemeteryVolume * 0.70 * 0.85 * 0.075; // property after perp care
+  const markerComm = cemeteryVolume * 0.30 * 0.075;           // markers — no perp care
+  const cemeteryComm = propertyComm + markerComm;
   const trustComm = annualFaceValue * (s.mixTrust / 100) * 0.0375;
   const terminalComm = annualFaceValue * (s.mixTerminal / 100) * 0.01;
 
@@ -86,7 +96,7 @@ function calcCloserComp(s, buckets, simplified = false) {
 
   // Cemetery volume breakdown
   const cemeteryVolume = totalVolume * (s.mixCemetery / 100);
-  const cemeteryNetVolume = cemeteryVolume * 0.85; // after 15% perpetual care
+  const cemeteryNetVolume = cemeteryVolume * 0.70 * 0.85 + cemeteryVolume * 0.30; // 70% property (15% perp care), 30% markers (no perp care)
 
   // Bonuses based on net volume (after cemetery perpetual care deduction)
   const netVolume = totalVolume - cemeteryVolume + cemeteryNetVolume;
@@ -131,7 +141,7 @@ function calcSetterComp(s, buckets, simplified = false) {
 
   // Cemetery volume breakdown (on setter-sourced volume)
   const cemeteryVolume = setterSourcedVolume * (s.mixCemetery / 100);
-  const cemeteryNetVolume = cemeteryVolume * 0.85; // after 15% perpetual care
+  const cemeteryNetVolume = cemeteryVolume * 0.70 * 0.85 + cemeteryVolume * 0.30; // 70% property (15% perp care), 30% markers (no perp care)
 
   // Setters: base wage + commission split only, no bonuses
   const monthlyBonus = 0;
@@ -173,7 +183,7 @@ function calcAftercareComp(s, buckets, aftercareLeadPct, specialistShare, simpli
 
   // Cemetery volume breakdown
   const cemeteryVolume = annualFaceValue * (s.mixCemetery / 100);
-  const cemeteryNetVolume = cemeteryVolume * 0.85; // after 15% perpetual care
+  const cemeteryNetVolume = cemeteryVolume * 0.70 * 0.85 + cemeteryVolume * 0.30; // 70% property (15% perp care), 30% markers (no perp care)
 
   // Bonuses based on net volume (after cemetery perpetual care deduction)
   const netVolume = annualFaceValue - cemeteryVolume + cemeteryNetVolume;
@@ -208,7 +218,8 @@ function calcLeaderComp(s, roles, buckets) {
   const teamVolume = closerVolume + aftercareVolume;
 
   // Leader comp is on net volume (after cemetery perpetual care deduction)
-  const perpCareFrac = (s.mixCemetery / 100) * 0.15;
+  // Perp care only on property (70% of cemetery), not markers (30%)
+  const perpCareFrac = (s.mixCemetery / 100) * 0.70 * 0.15;
   const teamNetVolume = teamVolume * (1 - perpCareFrac);
 
   const grossMonthlyOverride = teamNetVolume * 0.01;
@@ -383,7 +394,7 @@ export default function CommissionsPage({ demoMode = false }) {
   }
 
   // Active bonus tiers (use closer NET volume as reference for highlighting)
-  const perpCareFrac = (mixCemetery / 100) * 0.15;
+  const perpCareFrac = (mixCemetery / 100) * 0.70 * 0.15; // only on property (70% of cemetery)
   const closerNetVolume = closerAnnualVolume * (1 - perpCareFrac);
   const closerMonthlyAvg = closerNetVolume / 12;
   const activeMonthlyTier = MONTHLY_BONUSES.find(t => closerMonthlyAvg >= t.threshold)?.threshold;
@@ -433,6 +444,25 @@ export default function CommissionsPage({ demoMode = false }) {
         <div className="mt-3 bg-teal-50 border border-teal-200 rounded-lg px-4 py-3">
           <h4 className="text-xs font-bold text-teal-800 uppercase tracking-wide mb-1">60-Day Startup Guarantee (Closers)</h4>
           <p className="text-xs text-teal-700">New closers receive a guaranteed $4,000/month for the first 60 days. This advance is paid back through commissionable sales in 10% increments &mdash; giving closers runway to ramp up without financial pressure.</p>
+        </div>
+        <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 space-y-2">
+          <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wide">Chargeback &amp; Reserve Rules</h4>
+          <table className="w-full text-xs text-navy-600">
+            <tbody>
+              <tr className="border-b border-amber-200">
+                <td className="py-1.5 font-semibold text-navy-700 w-1/3">Chargeback Reserve</td>
+                <td className="py-1.5">10% of each commission check is held until the reserve reaches $2,000 per salesperson. Protects against future chargebacks.</td>
+              </tr>
+              <tr className="border-b border-amber-200">
+                <td className="py-1.5 font-semibold text-navy-700">Preneed Chargeback</td>
+                <td className="py-1.5">180-day chargeback window on all preneed sales. Terminal patient policies are exempt.</td>
+              </tr>
+              <tr>
+                <td className="py-1.5 font-semibold text-navy-700">Cemetery Property Chargeback</td>
+                <td className="py-1.5">30-day chargeback on cancellations only &mdash; not triggered by death.</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
         <p className="text-xs text-navy-400 mt-2">
           This page models comp for a single agent in each role. The Enterprise P&L derives headcount bottom-up: total production = closer production + aftercare production, with headcount scaling automatically as production grows.
@@ -515,20 +545,22 @@ export default function CommissionsPage({ demoMode = false }) {
               <div className="px-6 py-4 space-y-4">
                 {/* Inputs */}
                 <div className="bg-navy-50 rounded-lg p-4 space-y-3">
-                  <InputGroup label="Annual Volume">
-                    <NumberInput value={closerAnnualVolume} onChange={setCloserAnnualVolume} min={0} step={100000} prefix="$" />
-                  </InputGroup>
+                  <div className="grid grid-cols-2 gap-3">
+                    <InputGroup label="Annual Volume">
+                      <NumberInput value={closerAnnualVolume} onChange={setCloserAnnualVolume} min={0} step={100000} prefix="$" />
+                    </InputGroup>
+                    <InputGroup label="Base Hourly Wage">
+                      <NumberInput value={roles.closer.hourlyWage} onChange={v => updateRole('closer', 'hourlyWage', v)} min={0} step={0.50} prefix="$" />
+                    </InputGroup>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <InputGroup label="% Setter-Sourced">
                       <NumberInput value={pctSetterSourced} onChange={setPctSetterSourced} min={0} max={100} step={1} suffix="%" />
                     </InputGroup>
-                    <InputGroup label="Closer Split on Shared">
+                    <InputGroup label="Closer Split">
                       <NumberInput value={closerSplitPct} onChange={setCloserSplitPct} min={0} max={100} step={1} suffix="%" />
                     </InputGroup>
                   </div>
-                  <InputGroup label="Base Hourly Wage">
-                    <NumberInput value={roles.closer.hourlyWage} onChange={v => updateRole('closer', 'hourlyWage', v)} min={0} step={0.50} prefix="$" />
-                  </InputGroup>
                   <div className="grid grid-cols-3 gap-3">
                     <InputGroup label="Hours / Week">
                       <NumberInput value={roles.closer.hoursPerWeek} onChange={v => updateRole('closer', 'hoursPerWeek', v)} min={0} max={80} step={1} />
@@ -559,7 +591,7 @@ export default function CommissionsPage({ demoMode = false }) {
                       <td className="py-1 text-right text-navy-500 text-xs">{fmtLarge(comm.cemeteryVolume)}</td>
                     </tr>
                     <tr className="bg-amber-50">
-                      <td className="py-1 text-navy-500 text-xs">After 15% Perp. Care (commissionable)</td>
+                      <td className="py-1 text-navy-500 text-xs">Net Cemetery (perp. care on property only)</td>
                       <td className="py-1 text-right text-navy-500 text-xs">{fmtLarge(comm.cemeteryNetVolume)}</td>
                     </tr>
                     <tr className="bg-amber-50 border-b border-navy-100">
@@ -656,7 +688,7 @@ export default function CommissionsPage({ demoMode = false }) {
                       <td className="py-1 text-right text-navy-500 text-xs">{fmtLarge(comm.cemeteryVolume)}</td>
                     </tr>
                     <tr className="bg-amber-50 border-b border-navy-100">
-                      <td className="py-1 text-navy-500 text-xs">After 15% Perp. Care (commissionable)</td>
+                      <td className="py-1 text-navy-500 text-xs">Net Cemetery (perp. care on property only)</td>
                       <td className="py-1 text-right text-navy-500 text-xs">{fmtLarge(comm.cemeteryNetVolume)}</td>
                     </tr>
                     <Row label="Base Wage" sublabel={`$${role.hourlyWage}/hr x ${role.hoursPerWeek}hrs x ${role.weeksPerYear}wks`} value={comm.baseWage} />
@@ -738,7 +770,7 @@ export default function CommissionsPage({ demoMode = false }) {
                       <td className="py-1 text-right text-navy-500 text-xs">{fmtLarge(comm.cemeteryVolume)}</td>
                     </tr>
                     <tr className="bg-amber-50">
-                      <td className="py-1 text-navy-500 text-xs">After 15% Perp. Care (commissionable)</td>
+                      <td className="py-1 text-navy-500 text-xs">Net Cemetery (perp. care on property only)</td>
                       <td className="py-1 text-right text-navy-500 text-xs">{fmtLarge(comm.cemeteryNetVolume)}</td>
                     </tr>
                     <tr className="bg-amber-50 border-b border-navy-100">
@@ -831,7 +863,7 @@ export default function CommissionsPage({ demoMode = false }) {
                 <td className="py-2 text-right font-semibold text-navy-800">{fmtLarge(leader.teamVolume)}</td>
               </tr>
               <tr className="bg-amber-50">
-                <td className="py-1 text-navy-500 text-xs pl-4">Net Volume (after 15% perp. care on {mixCemetery}% cemetery)</td>
+                <td className="py-1 text-navy-500 text-xs pl-4">Net Volume (perp. care on property portion of {mixCemetery}% cemetery)</td>
                 <td className="py-1 text-right text-navy-600 text-xs font-semibold">{fmtLarge(leader.teamNetVolume)}</td>
               </tr>
               <Row label="Monthly Override (1% of net)" value={leader.grossMonthlyOverride} />

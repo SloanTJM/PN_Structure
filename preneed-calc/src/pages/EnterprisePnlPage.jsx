@@ -297,9 +297,11 @@ export default function EnterprisePnlPage() {
       }
       // Trust commission on insurance trust portion
       const trustComm = annualFaceValue * (trustPctOfTotal / 100) * 0.0375;
-      // Cemetery commission at 7.5% on after-perp-care face
-      const cemCommBase = annualFaceValue * cemeteryShareOfTotal * (1 - cemeteryPerpCareFrac);
-      const cemeteryComm = cemCommBase * 0.075;
+      // Cemetery commission: 70% property (perp care applies), 30% markers (no perp care)
+      const cemFace = annualFaceValue * cemeteryShareOfTotal;
+      const cemPropertyComm = cemFace * 0.70 * (1 - cemeteryPerpCareFrac) * 0.075;
+      const cemMarkerComm = cemFace * 0.30 * 0.075;
+      const cemeteryComm = cemPropertyComm + cemMarkerComm;
       const grossComm = preneedYr1 + preneedYr2 + preneedYr3 + trustComm + cemeteryComm;
       return { preneedYr1, preneedYr2, preneedYr3, trustComm, cemeteryComm, grossComm };
     }
@@ -457,9 +459,9 @@ export default function EnterprisePnlPage() {
       const aftercareCompEach = aftercareBaseWage + aftercareEffectiveComm + aftercareMonthlyBonus + aftercareAnnualBonusAmt;
       const aftercareTotalCost = aftercareCompEach * aftercareCount;
 
-      // D. Leader comp (on net volume after cemetery perpetual care)
+      // D. Leader comp (on net volume after cemetery perpetual care — property only)
       const teamSalesVolume = closerCount * closerVolume + aftercareCount * aftercareVolume;
-      const teamNetVolume = teamSalesVolume * (1 - (cemeteryMix / 100) * (perpCareRate / 100));
+      const teamNetVolume = teamSalesVolume * (1 - (cemeteryMix / 100) * 0.70 * (perpCareRate / 100));
       const grossMonthlyOverride = teamNetVolume * 0.01;
       const netMonthlyOverride = grossMonthlyOverride;
       const leaderVolumePerPeriod = teamNetVolume / 2;
@@ -471,7 +473,8 @@ export default function EnterprisePnlPage() {
       const totalSalesComp = closerTotalCost + setterTotalCost + aftercareTotalCost + leaderTotalCost;
 
       // ── ENTITY SPLIT (based on commissionable bases, not raw face) ──
-      const cemeteryCommBase = cemeteryFace * (1 - perpCareRate / 100);
+      // Property (70%) has perp care deducted, markers (30%) do not
+      const cemeteryCommBase = cemeteryFace * 0.70 * (1 - perpCareRate / 100) + cemeteryFace * 0.30;
       const totalCommBase = insuranceFace + cemeteryCommBase;
       const cemeteryShare = totalCommBase > 0 ? cemeteryCommBase / totalCommBase : 0;
       const insuranceShare = 1 - cemeteryShare;
@@ -516,8 +519,11 @@ export default function EnterprisePnlPage() {
       const fhNet = atNeedMargin + financeChargeIncome - fhTax - fhComp;
 
       // ── CEMETERY P&L ──
-      const cemeteryGrossProfit = cemeteryFace * (cemeteryMargin / 100);
-      const cemeteryPerpCare = cemeteryFace * (perpCareRate / 100);
+      // 70% property at cemeteryMargin, 30% markers at 70% margin; perp care only on property
+      const propertyFace = cemeteryFace * 0.70;
+      const markerFace = cemeteryFace * 0.30;
+      const cemeteryGrossProfit = propertyFace * (cemeteryMargin / 100) + markerFace * 0.70;
+      const cemeteryPerpCare = propertyFace * (perpCareRate / 100);
       const cemeteryPreTax = cemeteryGrossProfit - cemeteryPerpCare - cemeteryComp;
       const cemeteryTax = cemeteryPreTax * (passThroughTaxRate / 100);
       const cemeteryNet = cemeteryPreTax - cemeteryTax;
@@ -680,10 +686,16 @@ export default function EnterprisePnlPage() {
               <span className="text-xs font-semibold text-navy-600 uppercase tracking-wide block mb-2">Cemetery</span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <InputGroup label="Cemetery Mix"><NumberInput value={cemeteryMix} onChange={setCemeteryMix} min={0} max={100} step={1} suffix="%" /></InputGroup>
-                <InputGroup label="Perpetual Care">
+                <InputGroup label="Property / Markers">
+                  <div className="w-full rounded-lg border border-navy-200 bg-navy-50 px-3 py-2 text-sm text-navy-500">70% / 30%</div>
+                </InputGroup>
+                <InputGroup label="Perpetual Care (Property Only)">
                   <div className="w-full rounded-lg border border-navy-200 bg-navy-50 px-3 py-2 text-sm text-navy-500">{perpCareRate}%</div>
                 </InputGroup>
-                <InputGroup label="Cemetery Margin"><NumberInput value={cemeteryMargin} onChange={setCemeteryMargin} min={0} max={100} step={1} suffix="%" /></InputGroup>
+                <InputGroup label="Property Margin"><NumberInput value={cemeteryMargin} onChange={setCemeteryMargin} min={0} max={100} step={1} suffix="%" /></InputGroup>
+                <InputGroup label="Marker Margin">
+                  <div className="w-full rounded-lg border border-navy-200 bg-navy-50 px-3 py-2 text-sm text-navy-500">70%</div>
+                </InputGroup>
               </div>
             </div>
 
