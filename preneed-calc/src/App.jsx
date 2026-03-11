@@ -6,7 +6,7 @@ import UnhealthyPayoutPage from './pages/UnhealthyPayoutPage';
 import CommissionsPage from './pages/CommissionsPage';
 import EnterprisePnlPage from './pages/EnterprisePnlPage';
 
-const TABS = [
+const ADMIN_TABS = [
   { key: 'strategy', label: 'Product Strategy' },
   { key: 'payinfull', label: 'Pay In Full' },
   { key: 'healthy', label: 'Healthy Payout' },
@@ -15,8 +15,14 @@ const TABS = [
   { key: 'enterprise', label: 'Enterprise P&L' },
 ];
 
+const DEMO_TABS = [
+  { key: 'strategy', label: 'Product Strategy' },
+  { key: 'commissions', label: 'Commissions' },
+];
+
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
+  const [mode, setMode] = useState('admin'); // 'admin' or 'demo'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -76,6 +82,31 @@ export default function App() {
                 className="w-full rounded-lg border border-navy-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
               />
             </div>
+            {/* Admin / Demo Toggle */}
+            <div className="flex items-center justify-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setMode('admin')}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                  mode === 'admin'
+                    ? 'bg-navy-800 text-white'
+                    : 'bg-navy-100 text-navy-500 hover:bg-navy-200'
+                }`}
+              >
+                Admin
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('demo')}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                  mode === 'demo'
+                    ? 'bg-teal-500 text-navy-900'
+                    : 'bg-navy-100 text-navy-500 hover:bg-navy-200'
+                }`}
+              >
+                Demo
+              </button>
+            </div>
             {loginError && <p className="text-red-600 text-sm font-medium">{loginError}</p>}
             <button
               type="submit"
@@ -106,7 +137,7 @@ export default function App() {
 
           {/* Tab Navigation */}
           <nav className="flex gap-1 -mb-px">
-            {TABS.map((tab) => (
+            {(mode === 'demo' ? DEMO_TABS : ADMIN_TABS).map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
@@ -172,7 +203,7 @@ export default function App() {
           trustEarnRate={trustEarnRate} setTrustEarnRate={setTrustEarnRate}
         />
       )}
-      {activeTab === 'commissions' && <CommissionsPage />}
+      {activeTab === 'commissions' && <CommissionsPage demoMode={mode === 'demo'} />}
       {activeTab === 'enterprise' && <EnterprisePnlPage />}
     </div>
   );

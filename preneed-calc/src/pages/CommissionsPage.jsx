@@ -32,7 +32,12 @@ const DEFAULTS = {
 };
 
 /* ─── Calculations ─── */
-function calcGrossCommission(annualFaceValue, s) {
+function calcGrossCommission(annualFaceValue, s, simplified = false) {
+  if (simplified) {
+    const grossComm = annualFaceValue * 0.075;
+    return { preneedYr1: grossComm, preneedYr2: 0, preneedYr3: 0, totalPreneed: grossComm, cemeteryComm: 0, trustComm: 0, terminalComm: 0, grossComm };
+  }
+
   const termMixes = { single: s.mixSinglePay, '3pay': s.mix3Pay, '5pay': s.mix5Pay, '10pay': s.mix10Pay, '20pay': s.mix20Pay };
   const ageMixes = { '40-60': s.mixAge40_60, '61-65': s.mixAge61_65, '66-70': s.mixAge66_70, '71-75': s.mixAge71_75, '76-80': s.mixAge76_80, '81-85': s.mixAge81_85, '86-90': s.mixAge86_90 };
 
@@ -61,7 +66,7 @@ function calcGrossCommission(annualFaceValue, s) {
   return { preneedYr1, preneedYr2, preneedYr3, totalPreneed, cemeteryComm, trustComm, terminalComm, grossComm };
 }
 
-function calcCloserComp(s, buckets) {
+function calcCloserComp(s, buckets, simplified = false) {
   const totalVolume = buckets.closerAnnualVolume;
   const setterPct = buckets.pctSetterSourced / 100;
   const closerSplit = buckets.closerSplitPct / 100;
@@ -69,8 +74,8 @@ function calcCloserComp(s, buckets) {
   const directVolume = totalVolume * (1 - setterPct);
   const setterSourcedVolume = totalVolume * setterPct;
 
-  const directComm = calcGrossCommission(directVolume, s);
-  const sharedComm = calcGrossCommission(setterSourcedVolume, s);
+  const directComm = calcGrossCommission(directVolume, s, simplified);
+  const sharedComm = calcGrossCommission(setterSourcedVolume, s, simplified);
 
   // Closer keeps 100% on direct + their split on setter-sourced
   const grossComm = directComm.grossComm + sharedComm.grossComm * closerSplit;
@@ -110,13 +115,13 @@ function calcCloserComp(s, buckets) {
   };
 }
 
-function calcSetterComp(s, buckets) {
+function calcSetterComp(s, buckets, simplified = false) {
   const totalVolume = buckets.setterVolumeEach;
   const setterPct = buckets.pctSetterSourced / 100;
   const setterSplit = (100 - buckets.closerSplitPct) / 100;
 
   const setterSourcedVolume = totalVolume * setterPct;
-  const sharedComm = calcGrossCommission(setterSourcedVolume, s);
+  const sharedComm = calcGrossCommission(setterSourcedVolume, s, simplified);
 
   const grossComm = sharedComm.grossComm * setterSplit;
   const chargebacks = (grossComm - sharedComm.terminalComm * setterSplit) * (s.chargebackRate / 100);
@@ -146,9 +151,9 @@ function calcSetterComp(s, buckets) {
   };
 }
 
-function calcAftercareComp(s, buckets, aftercareLeadPct, specialistShare) {
+function calcAftercareComp(s, buckets, aftercareLeadPct, specialistShare, simplified = false) {
   const annualFaceValue = buckets.aftercareAnnualVolume;
-  const comm = calcGrossCommission(annualFaceValue, s);
+  const comm = calcGrossCommission(annualFaceValue, s, simplified);
 
   const grossComm = comm.grossComm;
   const chargebacks = (grossComm - comm.terminalComm) * (s.chargebackRate / 100);
@@ -222,20 +227,20 @@ function calcLeaderComp(s, roles, buckets) {
   };
 }
 
-function buildChartData(sharedState, roles, buckets, aftercareLeadPct, specialistShare) {
+function buildChartData(sharedState, roles, buckets, aftercareLeadPct, specialistShare, simplified = false) {
   const points = [];
   for (let fv = 0; fv <= 5000000; fv += 100000) {
     const point = { faceValue: fv };
     const bk = { ...buckets, closerAnnualVolume: fv, aftercareAnnualVolume: fv };
 
     const closerSt = { ...sharedState, hourlyWage: roles.closer.hourlyWage, hoursPerWeek: roles.closer.hoursPerWeek, weeksPerYear: roles.closer.weeksPerYear };
-    point.total_closer = calcCloserComp(closerSt, bk).totalAgentComp;
+    point.total_closer = calcCloserComp(closerSt, bk, simplified).totalAgentComp;
 
     const setterSt = { ...sharedState, hourlyWage: roles.setter.hourlyWage, hoursPerWeek: roles.setter.hoursPerWeek, weeksPerYear: roles.setter.weeksPerYear };
-    point.total_setter = calcSetterComp(setterSt, bk).totalAgentComp;
+    point.total_setter = calcSetterComp(setterSt, bk, simplified).totalAgentComp;
 
     const aftercareSt = { ...sharedState, hourlyWage: roles.aftercare.hourlyWage, hoursPerWeek: roles.aftercare.hoursPerWeek, weeksPerYear: roles.aftercare.weeksPerYear };
-    point.total_aftercare = calcAftercareComp(aftercareSt, bk, aftercareLeadPct, specialistShare).totalAgentComp;
+    point.total_aftercare = calcAftercareComp(aftercareSt, bk, aftercareLeadPct, specialistShare, simplified).totalAgentComp;
 
     points.push(point);
   }
@@ -267,9 +272,10 @@ function ChartTooltip({ active, payload, label }) {
 }
 
 /* ─── Main Component ─── */
-export default function CommissionsPage() {
+export default function CommissionsPage({ demoMode = false }) {
 
   const [rateTablesOpen, setRateTablesOpen] = useState(false);
+  const [simplifiedComm, setSimplifiedComm] = useState(demoMode);
 
   // Role-based state
   const [roles, setRoles] = useState(ROLE_DEFAULTS);
@@ -277,7 +283,7 @@ export default function CommissionsPage() {
   const [specialistShare, setSpecialistShare] = useState(AFTERCARE_DEFAULTS.specialistShare);
 
   // Lead bucket state
-  const [closerAnnualVolume, setCloserAnnualVolume] = useState(BUCKET_DEFAULTS.closerAnnualVolume);
+  const [closerAnnualVolume, setCloserAnnualVolume] = useState(demoMode ? 3000000 : BUCKET_DEFAULTS.closerAnnualVolume);
   const [pctSetterSourced, setPctSetterSourced] = useState(BUCKET_DEFAULTS.pctSetterSourced);
   const [closerSplitPct, setCloserSplitPct] = useState(BUCKET_DEFAULTS.closerSplitPct);
   const [aftercareAnnualVolume, setAftercareAnnualVolume] = useState(BUCKET_DEFAULTS.aftercareAnnualVolume);
@@ -333,13 +339,13 @@ export default function CommissionsPage() {
     const aftercareSt = { ...sharedState, hourlyWage: roles.aftercare.hourlyWage, hoursPerWeek: roles.aftercare.hoursPerWeek, weeksPerYear: roles.aftercare.weeksPerYear };
 
     return {
-      closer: calcCloserComp(closerSt, buckets),
-      setter: calcSetterComp(setterSt, buckets),
-      aftercare: calcAftercareComp(aftercareSt, buckets, aftercareLeadPct, specialistShare),
+      closer: calcCloserComp(closerSt, buckets, simplifiedComm),
+      setter: calcSetterComp(setterSt, buckets, simplifiedComm),
+      aftercare: calcAftercareComp(aftercareSt, buckets, aftercareLeadPct, specialistShare, simplifiedComm),
     };
   }, [roles, aftercareLeadPct, specialistShare,
     closerAnnualVolume, pctSetterSourced, closerSplitPct, aftercareAnnualVolume,
-    chargebackRate, modelingYear,
+    chargebackRate, modelingYear, simplifiedComm,
     mixPreneed, mixCemetery, mixTrust, mixTerminal,
     mixSinglePay, mix3Pay, mix5Pay, mix10Pay, mix20Pay,
     mixAge40_60, mixAge61_65, mixAge66_70, mixAge71_75, mixAge76_80, mixAge81_85, mixAge86_90,
@@ -349,10 +355,10 @@ export default function CommissionsPage() {
     roles, leaderBaseSalary, closerAnnualVolume, aftercareAnnualVolume,
   ]);
 
-  const chartData = useMemo(() => buildChartData(sharedState, roles, buckets, aftercareLeadPct, specialistShare), [
+  const chartData = useMemo(() => buildChartData(sharedState, roles, buckets, aftercareLeadPct, specialistShare, simplifiedComm), [
     roles, aftercareLeadPct, specialistShare,
     closerAnnualVolume, pctSetterSourced, closerSplitPct, aftercareAnnualVolume,
-    chargebackRate, modelingYear,
+    chargebackRate, modelingYear, simplifiedComm,
     mixPreneed, mixCemetery, mixTrust, mixTerminal,
     mixSinglePay, mix3Pay, mix5Pay, mix10Pay, mix20Pay,
     mixAge40_60, mixAge61_65, mixAge66_70, mixAge71_75, mixAge76_80, mixAge81_85, mixAge86_90,
@@ -406,7 +412,7 @@ export default function CommissionsPage() {
           <tbody>
             <tr className="border-b border-navy-100">
               <td className="py-1.5 font-semibold text-navy-700 w-1/4">Closers</td>
-              <td className="py-1.5">1 hired per {fmtLarge(closerAnnualVolume)} in closer production (rounded up)</td>
+              <td className="py-1.5">1 hired per {fmtLarge(2000000)} in closer production (rounded up)</td>
             </tr>
             <tr className="border-b border-navy-100">
               <td className="py-1.5 font-semibold text-navy-700">Setters</td>
@@ -416,16 +422,84 @@ export default function CommissionsPage() {
               <td className="py-1.5 font-semibold text-navy-700">Aftercare Specialist</td>
               <td className="py-1.5">1 per $10M total production (rounded down, min 1). Each specialist handles {fmtLarge(aftercareAnnualVolume)} in aftercare volume.</td>
             </tr>
+            {!demoMode && (
             <tr>
               <td className="py-1.5 font-semibold text-navy-700">Sales Leader</td>
               <td className="py-1.5">Fixed &mdash; always 1 regardless of production. Earns 1% override on total team volume + semi-annual bonus tiers.</td>
             </tr>
+            )}
           </tbody>
         </table>
+        <div className="mt-3 bg-teal-50 border border-teal-200 rounded-lg px-4 py-3">
+          <h4 className="text-xs font-bold text-teal-800 uppercase tracking-wide mb-1">60-Day Startup Guarantee (Closers)</h4>
+          <p className="text-xs text-teal-700">New closers receive a guaranteed $4,000/month for the first 60 days. This advance is paid back through commissionable sales in 10% increments &mdash; giving closers runway to ramp up without financial pressure.</p>
+        </div>
         <p className="text-xs text-navy-400 mt-2">
           This page models comp for a single agent in each role. The Enterprise P&L derives headcount bottom-up: total production = closer production + aftercare production, with headcount scaling automatically as production grows.
         </p>
       </div>
+
+      {/* ── Comp Advantages (demo only) ── */}
+      {demoMode && (
+      <div className="bg-white border border-navy-200 rounded-xl overflow-hidden">
+        <div className="bg-teal-700 px-5 py-3">
+          <h3 className="text-xs font-bold text-white uppercase tracking-wide">Compensation & Opportunity Advantages</h3>
+        </div>
+        <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          <div className="bg-navy-50 rounded-lg p-4">
+            <h4 className="text-xs font-bold text-navy-700 uppercase tracking-wide mb-1">Four Income Streams</h4>
+            <p className="text-xs text-navy-600">Every role earns a guaranteed base wage + commissions + monthly bonuses + annual bonuses. The base pays from day one while you build your book.</p>
+          </div>
+
+          <div className="bg-navy-50 rounded-lg p-4">
+            <h4 className="text-xs font-bold text-navy-700 uppercase tracking-wide mb-1">Untapped Lead Pipeline</h4>
+            <p className="text-xs text-navy-600">TJM&rsquo;s funeral homes have never had a dedicated sales team. Years of archived family contacts sit unworked &mdash; no recycled leads, no burned territory. The field is wide open.</p>
+          </div>
+
+          <div className="bg-navy-50 rounded-lg p-4">
+            <h4 className="text-xs font-bold text-navy-700 uppercase tracking-wide mb-1">Setter-Driven Deal Flow</h4>
+            <p className="text-xs text-navy-600">Dedicated setters handle all prospecting and appointment scheduling. Closers show up to pre-set, qualified appointments &mdash; no cold calling, no chasing no-shows.</p>
+          </div>
+
+          <div className="bg-navy-50 rounded-lg p-4">
+            <h4 className="text-xs font-bold text-navy-700 uppercase tracking-wide mb-1">A Product for Every Customer</h4>
+            <p className="text-xs text-navy-600">Eight product routes cover every health status and payment preference &mdash; healthy, sick, or terminal; pay-in-full or monthly. Nobody walks away because you don&rsquo;t have the right product.</p>
+          </div>
+
+          <div className="bg-navy-50 rounded-lg p-4">
+            <h4 className="text-xs font-bold text-navy-700 uppercase tracking-wide mb-1">Frictionless Contracting</h4>
+            <p className="text-xs text-navy-600">Actively building streamlined contract generation &mdash; simplified paperwork, digital tools, less admin time. Every minute saved on paperwork is a minute you&rsquo;re earning.</p>
+          </div>
+
+          <div className="bg-navy-50 rounded-lg p-4">
+            <h4 className="text-xs font-bold text-navy-700 uppercase tracking-wide mb-1">Trusted Brand &amp; Premier Facility</h4>
+            <p className="text-xs text-navy-600">You&rsquo;re representing a respected funeral home with deep community roots, not a faceless carrier. Families already know and trust TJM. The high-end facility reinforces quality before you say a word.</p>
+          </div>
+
+          <div className="bg-navy-50 rounded-lg p-4">
+            <h4 className="text-xs font-bold text-navy-700 uppercase tracking-wide mb-1">You Back Up What You Sell</h4>
+            <p className="text-xs text-navy-600">TJM delivers the product it sells. When a family preplans, your own company serves them &mdash; no third-party disconnect. You can promise quality and mean it.</p>
+          </div>
+
+          <div className="bg-navy-50 rounded-lg p-4">
+            <h4 className="text-xs font-bold text-navy-700 uppercase tracking-wide mb-1">Mileage Reimbursement</h4>
+            <p className="text-xs text-navy-600">All business mileage reimbursed at $0.67/mile &mdash; IRS standard rate. Drive to appointments without eating into your earnings.</p>
+          </div>
+
+          <div className="bg-navy-50 rounded-lg p-4">
+            <h4 className="text-xs font-bold text-navy-700 uppercase tracking-wide mb-1">Full Benefits Package</h4>
+            <p className="text-xs text-navy-600">Health insurance, PTO, company-paid life insurance, HSA, and 401(k) &mdash; a complete benefits package on top of your compensation.</p>
+          </div>
+
+          <div className="bg-navy-50 rounded-lg p-4">
+            <h4 className="text-xs font-bold text-navy-700 uppercase tracking-wide mb-1">Ground Floor Opportunity</h4>
+            <p className="text-xs text-navy-600">The comp model, product strategy, setter-closer workflow, and contract tools are all being built now. Early team members shape how it gets done &mdash; your voice matters here.</p>
+          </div>
+
+        </div>
+      </div>
+      )}
 
       {/* ── Section 2: Role Compensation Comparison (3-column) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -540,10 +614,11 @@ export default function CommissionsPage() {
         {(() => {
           const comm = commByRole.setter;
           const role = roles.setter;
+          const setterDisabled = pctSetterSourced === 0;
           return (
-            <section className="bg-white rounded-xl shadow-sm border border-navy-100 overflow-hidden">
+            <section className={`bg-white rounded-xl shadow-sm border border-navy-100 overflow-hidden${setterDisabled ? ' opacity-40 pointer-events-none' : ''}`}>
               <div className="px-6 py-3" style={{ backgroundColor: ROLE_COLORS.setter }}>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wide">Setter</h3>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wide">Setter{setterDisabled ? ' (No Setter-Sourced Deals)' : ''}</h3>
               </div>
               <div className="px-6 py-4 space-y-4">
                 {/* Inputs */}
@@ -719,6 +794,7 @@ export default function CommissionsPage() {
       </div>
 
       {/* ── Section 3: Sales Leader Compensation (full width) ── */}
+      {!demoMode && (
       <section className="bg-white rounded-xl shadow-sm border border-navy-100 overflow-hidden">
         <div className="bg-teal-700 px-6 py-3">
           <h3 className="text-sm font-bold text-white uppercase tracking-wide">Sales Leader Compensation</h3>
@@ -774,10 +850,11 @@ export default function CommissionsPage() {
           </table>
         </div>
       </section>
+      )}
 
       {/* ── Section 4: Role Compensation Comparison Chart ── */}
       <section className="bg-navy-900 rounded-xl shadow-sm p-6">
-        <h3 className="text-sm font-bold text-white uppercase tracking-wide mb-4">Role Compensation Comparison</h3>
+        <h3 className="text-sm font-bold text-white uppercase tracking-wide mb-4">Closer Compensation Curve</h3>
         <div className="h-[400px]">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 10 }}>
@@ -790,9 +867,7 @@ export default function CommissionsPage() {
               <ReferenceLine x={3000000} stroke="#627d98" strokeDasharray="4 4" label={{ value: '$3M', fill: '#9fb3c8', fontSize: 10 }} />
               <ReferenceLine y={150000} stroke="#3ebd93" strokeDasharray="4 4" label={{ value: '$150K', fill: '#3ebd93', fontSize: 10, position: 'left' }} />
               <ReferenceLine y={300000} stroke="#3ebd93" strokeDasharray="4 4" label={{ value: '$300K', fill: '#3ebd93', fontSize: 10, position: 'left' }} />
-              {ROLE_KEYS.filter(k => k !== 'aftercare').map(key => (
-                <Line key={key} type="monotone" dataKey={`total_${key}`} name={ROLE_LABELS[key]} stroke={ROLE_COLORS[key]} strokeWidth={2} dot={false} />
-              ))}
+              <Line type="monotone" dataKey="total_closer" name="Closer Total Comp" stroke={ROLE_COLORS.closer} strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -844,10 +919,12 @@ export default function CommissionsPage() {
             </div>
 
             {/* Sales Leader Override Note */}
+            {!demoMode && (
             <div className="bg-navy-50 rounded-lg px-4 py-3">
               <h4 className="text-xs font-bold text-navy-600 uppercase tracking-wide mb-1">Sales Leader Monthly Override</h4>
               <p className="text-xs text-navy-600">Flat 1% of all qualifying team sales (all products), paid monthly in arrears. Deductions for perpetual care fees, credit card fees, chargebacks, and unforeseen fees are applied before payout. The semi-annual bonus tiers (1.0%&ndash;2.5%) are separate and incremental.</p>
             </div>
+            )}
 
             {/* Other Product Rates */}
             <div>
@@ -866,7 +943,7 @@ export default function CommissionsPage() {
       </section>
 
       {/* ── Section 6: Bonus & Override Reference Tables ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 ${demoMode ? 'md:grid-cols-2' : 'md:grid-cols-3'} gap-6`}>
         {/* Monthly Bonuses */}
         <section className="bg-white rounded-xl shadow-sm border border-navy-100 overflow-hidden">
           <div className="bg-navy-100 px-6 py-3">
@@ -947,6 +1024,7 @@ export default function CommissionsPage() {
         </section>
 
         {/* Semi-Annual Bonus Tiers */}
+        {!demoMode && (
         <section className="bg-white rounded-xl shadow-sm border border-navy-100 overflow-hidden">
           <div className="bg-navy-100 px-6 py-3">
             <h3 className="text-xs font-bold text-navy-700 uppercase tracking-wide">Semi-Annual Bonus Tiers</h3>
@@ -979,6 +1057,7 @@ export default function CommissionsPage() {
             <p className="text-xs text-navy-400 mt-2">Marginal rates per 6-month period. Current: {fmtLarge(leader.volumePerPeriod)}/period. Monthly override (1%) is separate.</p>
           </div>
         </section>
+        )}
       </div>
 
       {/* ── Fixed Assumptions ── */}
@@ -989,6 +1068,22 @@ export default function CommissionsPage() {
             Reset Defaults
           </button>
         </div>
+
+        {/* Simplified Commission Toggle (demo mode only) */}
+        {demoMode && (
+        <div className="flex items-center justify-between bg-teal-50 border border-teal-200 rounded-lg px-4 py-3">
+          <div>
+            <span className="text-sm font-semibold text-teal-800">Simplified Commission Rate</span>
+            <p className="text-xs text-teal-600 mt-0.5">Use a flat 7.5% commission across all product sales instead of detailed rate tables</p>
+          </div>
+          <button
+            onClick={() => setSimplifiedComm(!simplifiedComm)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${simplifiedComm ? 'bg-teal-500' : 'bg-navy-300'}`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${simplifiedComm ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+        )}
 
         {/* Global Settings */}
         <div>
@@ -1005,9 +1100,11 @@ export default function CommissionsPage() {
                 <option value={3}>Year 3+ (steady state)</option>
               </select>
             </InputGroup>
+            {!demoMode && (
             <InputGroup label="Leader Base Salary">
               <NumberInput value={leaderBaseSalary} onChange={setLeaderBaseSalary} min={0} step={1000} prefix="$" />
             </InputGroup>
+            )}
           </div>
         </div>
 

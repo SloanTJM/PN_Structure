@@ -74,8 +74,8 @@ export const ROLE_DEFAULTS = {
 };
 
 export const BUCKET_DEFAULTS = {
-  closerAnnualVolume: 2000000,
-  pctSetterSourced: 80,
+  closerAnnualVolume: 2500000,
+  pctSetterSourced: 0,
   closerSplitPct: 80,
   aftercareAnnualVolume: 1000000,
 };
