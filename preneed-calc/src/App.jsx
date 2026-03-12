@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import ProductStrategyPage from './pages/ProductStrategyPage';
+import DemoProductStrategyPage from './pages/DemoProductStrategyPage';
 import PayInFullPage from './pages/PayInFullPage';
 import HealthyPayoutPage from './pages/HealthyPayoutPage';
 import UnhealthyPayoutPage from './pages/UnhealthyPayoutPage';
 import CommissionsPage from './pages/CommissionsPage';
 import EnterprisePnlPage from './pages/EnterprisePnlPage';
+import DemoCompPage from './pages/DemoCompPage';
 
 const ADMIN_TABS = [
   { key: 'strategy', label: 'Product Strategy' },
@@ -15,9 +17,34 @@ const ADMIN_TABS = [
   { key: 'enterprise', label: 'Enterprise P&L' },
 ];
 
-const DEMO_TABS = [
-  { key: 'strategy', label: 'Product Strategy' },
-  { key: 'commissions', label: 'Commissions' },
+const DEMO_TABS_BY_MODE = {
+  demo: [
+    { key: 'strategy',       label: 'Product Strategy' },
+    { key: 'demo-all',       label: 'All Roles' },
+    { key: 'demo-closer',    label: 'Preneed Specialist' },
+    { key: 'demo-setter',    label: 'Appointment Specialist' },
+    { key: 'demo-aftercare', label: 'Aftercare Specialist' },
+  ],
+  demo1: [
+    { key: 'strategy',       label: 'Product Strategy' },
+    { key: 'demo-closer',    label: 'Preneed Specialist' },
+  ],
+  demo2: [
+    { key: 'strategy',       label: 'Product Strategy' },
+    { key: 'demo-setter',    label: 'Appointment Specialist' },
+  ],
+  demo3: [
+    { key: 'strategy',       label: 'Product Strategy' },
+    { key: 'demo-aftercare', label: 'Aftercare Specialist' },
+  ],
+};
+
+const MODE_BUTTONS = [
+  { key: 'admin', label: 'Admin',  style: 'navy' },
+  { key: 'demo',  label: 'Demo',   style: 'teal' },
+  { key: 'demo1', label: 'Demo 1', style: 'teal' },
+  { key: 'demo2', label: 'Demo 2', style: 'teal' },
+  { key: 'demo3', label: 'Demo 3', style: 'teal' },
 ];
 
 export default function App() {
@@ -53,6 +80,12 @@ export default function App() {
     }
   }
 
+  // When switching modes, reset to a valid tab for that mode
+  function handleModeSwitch(newMode) {
+    setMode(newMode);
+    setActiveTab('strategy');
+  }
+
   if (!loggedIn) {
     return (
       <div className="min-h-screen bg-navy-900 flex items-center justify-center px-4">
@@ -82,30 +115,24 @@ export default function App() {
                 className="w-full rounded-lg border border-navy-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
               />
             </div>
-            {/* Admin / Demo Toggle */}
-            <div className="flex items-center justify-center gap-3 pt-1">
-              <button
-                type="button"
-                onClick={() => setMode('admin')}
-                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-                  mode === 'admin'
-                    ? 'bg-navy-800 text-white'
-                    : 'bg-navy-100 text-navy-500 hover:bg-navy-200'
-                }`}
-              >
-                Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('demo')}
-                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-                  mode === 'demo'
-                    ? 'bg-teal-500 text-navy-900'
-                    : 'bg-navy-100 text-navy-500 hover:bg-navy-200'
-                }`}
-              >
-                Demo
-              </button>
+            {/* Mode Toggle */}
+            <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
+              {MODE_BUTTONS.map((btn) => {
+                const active = mode === btn.key;
+                const cls = active
+                  ? btn.style === 'navy' ? 'bg-navy-800 text-white' : 'bg-teal-500 text-navy-900'
+                  : 'bg-navy-100 text-navy-500 hover:bg-navy-200';
+                return (
+                  <button
+                    key={btn.key}
+                    type="button"
+                    onClick={() => handleModeSwitch(btn.key)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${cls}`}
+                  >
+                    {btn.label}
+                  </button>
+                );
+              })}
             </div>
             {loginError && <p className="text-red-600 text-sm font-medium">{loginError}</p>}
             <button
@@ -136,12 +163,12 @@ export default function App() {
           </div>
 
           {/* Tab Navigation */}
-          <nav className="flex gap-1 -mb-px">
-            {(mode === 'demo' ? DEMO_TABS : ADMIN_TABS).map((tab) => (
+          <nav className="flex gap-1 -mb-px overflow-x-auto">
+            {(DEMO_TABS_BY_MODE[mode] || ADMIN_TABS).map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${
+                className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${
                   activeTab === tab.key
                     ? 'bg-navy-50 text-navy-900'
                     : 'text-navy-300 hover:text-white hover:bg-navy-800'
@@ -155,56 +182,68 @@ export default function App() {
       </header>
 
       {/* Page Content */}
-      {activeTab === 'strategy' && <ProductStrategyPage />}
-      {activeTab === 'payinfull' && (
-        <PayInFullPage
-          faceValue={faceValue} setFaceValue={setFaceValue}
-          customerAge={customerAge} setCustomerAge={setCustomerAge}
-          earnRate={earnRate} setEarnRate={setEarnRate}
-          yearsUntilClaim={yearsUntilClaim} setYearsUntilClaim={setYearsUntilClaim}
-          tjmTaxRate={tjmTaxRate} setTjmTaxRate={setTjmTaxRate}
-          trustTaxRate={trustTaxRate} setTrustTaxRate={setTrustTaxRate}
-          passThroughTaxRate={passThroughTaxRate} setPassThroughTaxRate={setPassThroughTaxRate}
-          dividendExitTaxRate={dividendExitTaxRate} setDividendExitTaxRate={setDividendExitTaxRate}
-          guaranteedRate={guaranteedRate} setGuaranteedRate={setGuaranteedRate}
-          trustEarnRate={trustEarnRate} setTrustEarnRate={setTrustEarnRate}
-        />
+      {mode === 'admin' ? (
+        <>
+          {activeTab === 'strategy' && <ProductStrategyPage />}
+          {activeTab === 'payinfull' && (
+            <PayInFullPage
+              faceValue={faceValue} setFaceValue={setFaceValue}
+              customerAge={customerAge} setCustomerAge={setCustomerAge}
+              earnRate={earnRate} setEarnRate={setEarnRate}
+              yearsUntilClaim={yearsUntilClaim} setYearsUntilClaim={setYearsUntilClaim}
+              tjmTaxRate={tjmTaxRate} setTjmTaxRate={setTjmTaxRate}
+              trustTaxRate={trustTaxRate} setTrustTaxRate={setTrustTaxRate}
+              passThroughTaxRate={passThroughTaxRate} setPassThroughTaxRate={setPassThroughTaxRate}
+              dividendExitTaxRate={dividendExitTaxRate} setDividendExitTaxRate={setDividendExitTaxRate}
+              guaranteedRate={guaranteedRate} setGuaranteedRate={setGuaranteedRate}
+              trustEarnRate={trustEarnRate} setTrustEarnRate={setTrustEarnRate}
+            />
+          )}
+          {activeTab === 'healthy' && (
+            <HealthyPayoutPage
+              faceValue={faceValue} setFaceValue={setFaceValue}
+              customerAge={customerAge} setCustomerAge={setCustomerAge}
+              paymentTermYears={paymentTermYears} setPaymentTermYears={setPaymentTermYears}
+              earnRate={earnRate} setEarnRate={setEarnRate}
+              yearsUntilClaim={yearsUntilClaim} setYearsUntilClaim={setYearsUntilClaim}
+              financeChargeRate={financeChargeRate} setFinanceChargeRate={setFinanceChargeRate}
+              tjmTaxRate={tjmTaxRate} setTjmTaxRate={setTjmTaxRate}
+              trustTaxRate={trustTaxRate} setTrustTaxRate={setTrustTaxRate}
+              passThroughTaxRate={passThroughTaxRate} setPassThroughTaxRate={setPassThroughTaxRate}
+              dividendExitTaxRate={dividendExitTaxRate} setDividendExitTaxRate={setDividendExitTaxRate}
+              overrideMonthlyRate={overrideMonthlyRate} setOverrideMonthlyRate={setOverrideMonthlyRate}
+              guaranteedRate={guaranteedRate} setGuaranteedRate={setGuaranteedRate}
+              trustEarnRate={trustEarnRate} setTrustEarnRate={setTrustEarnRate}
+            />
+          )}
+          {activeTab === 'unhealthy' && (
+            <UnhealthyPayoutPage
+              faceValue={faceValue} setFaceValue={setFaceValue}
+              customerAge={customerAge} setCustomerAge={setCustomerAge}
+              paymentTermYears={paymentTermYears} setPaymentTermYears={setPaymentTermYears}
+              earnRate={earnRate} setEarnRate={setEarnRate}
+              yearsUntilClaim={yearsUntilClaim} setYearsUntilClaim={setYearsUntilClaim}
+              financeChargeRate={financeChargeRate} setFinanceChargeRate={setFinanceChargeRate}
+              tjmTaxRate={tjmTaxRate} setTjmTaxRate={setTjmTaxRate}
+              trustTaxRate={trustTaxRate} setTrustTaxRate={setTrustTaxRate}
+              passThroughTaxRate={passThroughTaxRate} setPassThroughTaxRate={setPassThroughTaxRate}
+              dividendExitTaxRate={dividendExitTaxRate} setDividendExitTaxRate={setDividendExitTaxRate}
+              guaranteedRate={guaranteedRate} setGuaranteedRate={setGuaranteedRate}
+              trustEarnRate={trustEarnRate} setTrustEarnRate={setTrustEarnRate}
+            />
+          )}
+          {activeTab === 'commissions' && <CommissionsPage />}
+          {activeTab === 'enterprise' && <EnterprisePnlPage />}
+        </>
+      ) : (
+        <>
+          {activeTab === 'strategy' && <DemoProductStrategyPage />}
+          {activeTab === 'demo-all' && <DemoCompPage demoRole="all" />}
+          {activeTab === 'demo-closer' && <DemoCompPage demoRole="closer" />}
+          {activeTab === 'demo-setter' && <DemoCompPage demoRole="setter" />}
+          {activeTab === 'demo-aftercare' && <DemoCompPage demoRole="aftercare" />}
+        </>
       )}
-      {activeTab === 'healthy' && (
-        <HealthyPayoutPage
-          faceValue={faceValue} setFaceValue={setFaceValue}
-          customerAge={customerAge} setCustomerAge={setCustomerAge}
-          paymentTermYears={paymentTermYears} setPaymentTermYears={setPaymentTermYears}
-          earnRate={earnRate} setEarnRate={setEarnRate}
-          yearsUntilClaim={yearsUntilClaim} setYearsUntilClaim={setYearsUntilClaim}
-          financeChargeRate={financeChargeRate} setFinanceChargeRate={setFinanceChargeRate}
-          tjmTaxRate={tjmTaxRate} setTjmTaxRate={setTjmTaxRate}
-          trustTaxRate={trustTaxRate} setTrustTaxRate={setTrustTaxRate}
-          passThroughTaxRate={passThroughTaxRate} setPassThroughTaxRate={setPassThroughTaxRate}
-          dividendExitTaxRate={dividendExitTaxRate} setDividendExitTaxRate={setDividendExitTaxRate}
-          overrideMonthlyRate={overrideMonthlyRate} setOverrideMonthlyRate={setOverrideMonthlyRate}
-          guaranteedRate={guaranteedRate} setGuaranteedRate={setGuaranteedRate}
-          trustEarnRate={trustEarnRate} setTrustEarnRate={setTrustEarnRate}
-        />
-      )}
-      {activeTab === 'unhealthy' && (
-        <UnhealthyPayoutPage
-          faceValue={faceValue} setFaceValue={setFaceValue}
-          customerAge={customerAge} setCustomerAge={setCustomerAge}
-          paymentTermYears={paymentTermYears} setPaymentTermYears={setPaymentTermYears}
-          earnRate={earnRate} setEarnRate={setEarnRate}
-          yearsUntilClaim={yearsUntilClaim} setYearsUntilClaim={setYearsUntilClaim}
-          financeChargeRate={financeChargeRate} setFinanceChargeRate={setFinanceChargeRate}
-          tjmTaxRate={tjmTaxRate} setTjmTaxRate={setTjmTaxRate}
-          trustTaxRate={trustTaxRate} setTrustTaxRate={setTrustTaxRate}
-          passThroughTaxRate={passThroughTaxRate} setPassThroughTaxRate={setPassThroughTaxRate}
-          dividendExitTaxRate={dividendExitTaxRate} setDividendExitTaxRate={setDividendExitTaxRate}
-          guaranteedRate={guaranteedRate} setGuaranteedRate={setGuaranteedRate}
-          trustEarnRate={trustEarnRate} setTrustEarnRate={setTrustEarnRate}
-        />
-      )}
-      {activeTab === 'commissions' && <CommissionsPage demoMode={mode === 'demo'} />}
-      {activeTab === 'enterprise' && <EnterprisePnlPage />}
     </div>
   );
 }

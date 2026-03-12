@@ -40,37 +40,37 @@ export const SEMI_ANNUAL_TIERS = [
 ];
 
 export const MONTHLY_BONUSES = [
-  { threshold: 300000, bonus: 6500 },
-  { threshold: 275000, bonus: 5400 },
-  { threshold: 250000, bonus: 4200 },
-  { threshold: 225000, bonus: 3000 },
-  { threshold: 200000, bonus: 2100 },
-  { threshold: 175000, bonus: 1500 },
-  { threshold: 150000, bonus: 1000 },
-  { threshold: 125000, bonus: 600 },
-  { threshold: 100000, bonus: 300 },
-  { threshold: 75000, bonus: 200 },
+  { threshold: 300000, bonus: 5750 },
+  { threshold: 275000, bonus: 5000 },
+  { threshold: 250000, bonus: 4250 },
+  { threshold: 225000, bonus: 3500 },
+  { threshold: 200000, bonus: 2750 },
+  { threshold: 175000, bonus: 2000 },
+  { threshold: 150000, bonus: 1500 },
+  { threshold: 125000, bonus: 1000 },
+  { threshold: 100000, bonus: 750 },
+  { threshold: 75000, bonus: 500 },
 ];
 
 export const ANNUAL_BONUSES = [
-  { threshold: 3500000, bonus: 75000 },
-  { threshold: 3250000, bonus: 57500 },
-  { threshold: 3000000, bonus: 47500 },
-  { threshold: 2750000, bonus: 35000 },
-  { threshold: 2500000, bonus: 22500 },
-  { threshold: 2250000, bonus: 15000 },
-  { threshold: 2000000, bonus: 10000 },
-  { threshold: 1750000, bonus: 7500 },
-  { threshold: 1500000, bonus: 5000 },
-  { threshold: 1250000, bonus: 3500 },
-  { threshold: 1000000, bonus: 2250 },
-  { threshold: 750000, bonus: 1350 },
+  { threshold: 3500000, bonus: 60000 },
+  { threshold: 3250000, bonus: 50000 },
+  { threshold: 3000000, bonus: 40000 },
+  { threshold: 2750000, bonus: 32500 },
+  { threshold: 2500000, bonus: 25000 },
+  { threshold: 2250000, bonus: 20000 },
+  { threshold: 2000000, bonus: 15000 },
+  { threshold: 1750000, bonus: 12000 },
+  { threshold: 1500000, bonus: 9000 },
+  { threshold: 1250000, bonus: 6500 },
+  { threshold: 1000000, bonus: 4000 },
+  { threshold: 750000, bonus: 2000 },
 ];
 
 export const ROLE_DEFAULTS = {
   closer:    { hourlyWage: 13.00, hoursPerWeek: 40, weeksPerYear: 52, teamCount: 3 },
   setter:    { hourlyWage: 16.00, hoursPerWeek: 40, weeksPerYear: 52, teamCount: 2 },
-  aftercare: { hourlyWage: 13.00, hoursPerWeek: 40, weeksPerYear: 52, teamCount: 1 },
+  aftercare: { hourlyWage: 18.00, hoursPerWeek: 40, weeksPerYear: 52, teamCount: 1 },
 };
 
 export const BUCKET_DEFAULTS = {

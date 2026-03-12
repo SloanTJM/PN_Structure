@@ -770,22 +770,22 @@ export default function EnterprisePnlPage() {
             <div>
               <span className="text-xs font-semibold text-navy-600 uppercase tracking-wide block mb-2">Sales Team Scaling</span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <InputGroup label="Volume per Closer"><NumberInput value={volumePerCloser} onChange={setVolumePerCloser} min={500000} step={500000} prefix="$" /></InputGroup>
-                <InputGroup label="Volume per Setter"><NumberInput value={volumePerSetter} onChange={setVolumePerSetter} min={1000000} step={1000000} prefix="$" /></InputGroup>
+                <InputGroup label="Volume per Preneed Specialist"><NumberInput value={volumePerCloser} onChange={setVolumePerCloser} min={500000} step={500000} prefix="$" /></InputGroup>
+                <InputGroup label="Volume per Appt. Specialist"><NumberInput value={volumePerSetter} onChange={setVolumePerSetter} min={1000000} step={1000000} prefix="$" /></InputGroup>
                 <InputGroup label="Prod. per Aftercare"><NumberInput value={productionPerAftercare} onChange={setProductionPerAftercare} min={1000000} step={1000000} prefix="$" /></InputGroup>
                 <InputGroup label="Leader (fixed)">
                   <div className="w-full rounded-lg border border-navy-200 bg-navy-50 px-3 py-2 text-sm text-navy-500">1</div>
                 </InputGroup>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-3">
-                <InputGroup label="Closer Hourly Wage"><NumberInput value={closerHourlyWage} onChange={setCloserHourlyWage} min={0} max={50} step={0.50} prefix="$" /></InputGroup>
-                <InputGroup label="Setter Hourly Wage"><NumberInput value={setterHourlyWage} onChange={setSetterHourlyWage} min={0} max={50} step={0.50} prefix="$" /></InputGroup>
-                <InputGroup label="Aftercare Hourly Wage"><NumberInput value={aftercareHourlyWage} onChange={setAftercareHourlyWage} min={0} max={50} step={0.50} prefix="$" /></InputGroup>
+                <InputGroup label="Preneed Specialist Wage"><NumberInput value={closerHourlyWage} onChange={setCloserHourlyWage} min={0} max={50} step={0.50} prefix="$" /></InputGroup>
+                <InputGroup label="Appt. Specialist Wage"><NumberInput value={setterHourlyWage} onChange={setSetterHourlyWage} min={0} max={50} step={0.50} prefix="$" /></InputGroup>
+                <InputGroup label="Aftercare Specialist Wage"><NumberInput value={aftercareHourlyWage} onChange={setAftercareHourlyWage} min={0} max={50} step={0.50} prefix="$" /></InputGroup>
                 <InputGroup label="Leader Base Salary"><NumberInput value={leaderBaseSalary} onChange={setLeaderBaseSalary} min={0} step={5000} prefix="$" /></InputGroup>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-3">
-                <InputGroup label="% Setter-Sourced"><NumberInput value={pctSetterSourced} onChange={setPctSetterSourced} min={0} max={100} step={5} suffix="%" /></InputGroup>
-                <InputGroup label="Closer Split %"><NumberInput value={closerSplitPct} onChange={setCloserSplitPct} min={0} max={100} step={5} suffix="%" /></InputGroup>
+                <InputGroup label="% Appt.-Sourced"><NumberInput value={pctSetterSourced} onChange={setPctSetterSourced} min={0} max={100} step={5} suffix="%" /></InputGroup>
+                <InputGroup label="Preneed Split %"><NumberInput value={closerSplitPct} onChange={setCloserSplitPct} min={0} max={100} step={5} suffix="%" /></InputGroup>
                 <InputGroup label="Aftercare Volume"><NumberInput value={aftercareAnnualVolume} onChange={setAftercareAnnualVolume} min={0} step={100000} prefix="$" /></InputGroup>
               </div>
 
@@ -808,19 +808,19 @@ export default function EnterprisePnlPage() {
                       </thead>
                       <tbody>
                         <tr className="border-b border-navy-100">
-                          <td className="py-2 font-semibold text-navy-700">Closers</td>
+                          <td className="py-2 font-semibold text-navy-700">Preneed Specialists</td>
                           <td className="py-2">1 per {fmtLarge(volumePerCloser)} closer production (rounded up)</td>
                           <td className="py-2 text-center font-bold text-navy-800">{yr1.closerCount}</td>
                           <td className="py-2 text-center font-bold text-navy-800">{yrN.closerCount}</td>
                         </tr>
                         <tr className="border-b border-navy-100">
-                          <td className="py-2 font-semibold text-navy-700">Setters</td>
+                          <td className="py-2 font-semibold text-navy-700">Appointment Specialists</td>
                           <td className="py-2">1 per {fmtLarge(volumePerSetter)} closer production (rounded up)</td>
                           <td className="py-2 text-center font-bold text-navy-800">{yr1.setterCount}</td>
                           <td className="py-2 text-center font-bold text-navy-800">{yrN.setterCount}</td>
                         </tr>
                         <tr className="border-b border-navy-100">
-                          <td className="py-2 font-semibold text-navy-700">Aftercare</td>
+                          <td className="py-2 font-semibold text-navy-700">Aftercare Specialists</td>
                           <td className="py-2">1 per {fmtLarge(productionPerAftercare)} total production (rounded down, min 1)</td>
                           <td className="py-2 text-center font-bold text-navy-800">{yr1.aftercareCount}</td>
                           <td className="py-2 text-center font-bold text-navy-800">{yrN.aftercareCount}</td>
@@ -985,9 +985,9 @@ export default function EnterprisePnlPage() {
                       <YAxis tickFormatter={fmtLarge} stroke="#9fb3c8" tick={{ fontSize: 11 }} />
                       <Tooltip content={<ChartTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 11, color: '#d9e2ec' }} />
-                      <Bar dataKey="closerCost" name="Closer" stackId="role" fill="#2563eb" />
-                      <Bar dataKey="setterCost" name="Setter" stackId="role" fill="#7c3aed" />
-                      <Bar dataKey="aftercareCost" name="Aftercare" stackId="role" fill="#059669" />
+                      <Bar dataKey="closerCost" name="Preneed Specialist" stackId="role" fill="#2563eb" />
+                      <Bar dataKey="setterCost" name="Appointment Specialist" stackId="role" fill="#7c3aed" />
+                      <Bar dataKey="aftercareCost" name="Aftercare Specialist" stackId="role" fill="#059669" />
                       <Bar dataKey="leaderCost" name="Leader" stackId="role" fill="#0891b2" />
                       <Line type="monotone" dataKey="combinedNet" name="Combined Profit" stroke="#ffffff" strokeWidth={2} dot={false} />
                     </ComposedChart>
