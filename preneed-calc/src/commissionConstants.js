@@ -69,7 +69,7 @@ export const ANNUAL_BONUSES = [
 
 export const ROLE_DEFAULTS = {
   closer:    { hourlyWage: 13.00, hoursPerWeek: 40, weeksPerYear: 52, teamCount: 3 },
-  setter:    { hourlyWage: 16.00, hoursPerWeek: 40, weeksPerYear: 52, teamCount: 2 },
+  setter:    { hourlyWage: 18.00, hoursPerWeek: 40, weeksPerYear: 52, teamCount: 2 },
   aftercare: { hourlyWage: 18.00, hoursPerWeek: 40, weeksPerYear: 52, teamCount: 1 },
 };
 
