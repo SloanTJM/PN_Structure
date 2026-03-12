@@ -1,3 +1,10 @@
+import { AGENT_RATES } from '../commissionConstants';
+import { fmtPct } from '../utils/formatters';
+
+const TERM_KEYS = ['single', '3pay', '5pay', '10pay', '20pay'];
+const TERM_LABELS = { single: 'Single Pay', '3pay': '3-Pay', '5pay': '5-Pay', '10pay': '10-Pay', '20pay': '20-Pay' };
+const AGE_BANDS = ['40-60', '61-65', '66-70', '71-75', '76-80', '81-85', '86-90'];
+
 export default function DemoProductStrategyPage() {
   return (
     <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 space-y-8">
@@ -236,6 +243,61 @@ export default function DemoProductStrategyPage() {
               </tr>
             </tbody>
           </table>
+        </div>
+      </section>
+
+      {/* Detailed Rate Table by Term & Age Band */}
+      <section className="bg-white rounded-xl shadow-sm border border-navy-100 overflow-hidden">
+        <div className="bg-navy-800 text-white px-6 py-4">
+          <h2 className="text-lg font-semibold">Insurance Commission Rate Table</h2>
+          <p className="text-navy-300 text-xs mt-1">Agent commission rates by payment term and age band (excludes sales leader override).</p>
+        </div>
+        <div className="px-6 py-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-navy-100">
+                  <th className="px-2 py-1.5 text-left text-navy-700 font-semibold">Term</th>
+                  <th className="px-2 py-1.5 text-left text-navy-700 font-semibold">Age Band</th>
+                  <th className="px-2 py-1.5 text-right text-navy-700 font-semibold">Year 1</th>
+                  <th className="px-2 py-1.5 text-right text-navy-700 font-semibold">Year 2</th>
+                  <th className="px-2 py-1.5 text-right text-navy-700 font-semibold">Year 3</th>
+                  <th className="px-2 py-1.5 text-right text-navy-700 font-semibold">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {TERM_KEYS.map((term) =>
+                  AGE_BANDS.filter(age => AGENT_RATES[term][age]).map((age, i) => {
+                    const rates = AGENT_RATES[term][age];
+                    const total = rates.reduce((a, b) => a + b, 0);
+                    return (
+                      <tr key={`${term}-${age}`} className={i === 0 ? 'border-t border-navy-200' : ''}>
+                        {i === 0 && <td className="px-2 py-1 font-semibold text-navy-700" rowSpan={AGE_BANDS.filter(a => AGENT_RATES[term][a]).length}>{TERM_LABELS[term]}</td>}
+                        <td className="px-2 py-1 text-navy-600">{age}</td>
+                        <td className="px-2 py-1 text-right text-navy-800">{fmtPct(rates[0])}</td>
+                        <td className="px-2 py-1 text-right text-navy-800">{rates[1] != null ? fmtPct(rates[1]) : '\u2014'}</td>
+                        <td className="px-2 py-1 text-right text-navy-800">{rates[2] != null ? fmtPct(rates[2]) : '\u2014'}</td>
+                        <td className="px-2 py-1 text-right font-semibold text-navy-800">{fmtPct(total)}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Other Product Rates */}
+          <div className="mt-4 pt-4 border-t border-navy-200">
+            <h4 className="text-xs font-bold text-navy-600 uppercase tracking-wide mb-2">Other Product Commission Rates</h4>
+            <table className="text-xs">
+              <tbody>
+                <tr><td className="pr-6 py-1 text-navy-600">Cemetery Markers</td><td className="py-1 font-semibold text-navy-800">7.50%</td><td className="pl-4 py-1 text-navy-500">Flat rate on sale price</td></tr>
+                <tr><td className="pr-6 py-1 text-navy-600">Cemetery Property</td><td className="py-1 font-semibold text-navy-800">7.50%</td><td className="pl-4 py-1 text-navy-500">Flat rate on sale price</td></tr>
+                <tr><td className="pr-6 py-1 text-navy-600">Trust + Interest</td><td className="py-1 font-semibold text-navy-800">3.75%</td><td className="pl-4 py-1 text-navy-500">Half of insurance rate</td></tr>
+                <tr><td className="pr-6 py-1 text-navy-600">Terminal (any product)</td><td className="py-1 font-semibold text-navy-800">1.00%</td><td className="pl-4 py-1 text-navy-500">Flat</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 

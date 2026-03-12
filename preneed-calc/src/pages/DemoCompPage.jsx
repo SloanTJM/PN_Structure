@@ -55,11 +55,12 @@ function ChartTooltip({ active, payload, label }) {
 /* ─── Role Description Cards ─── */
 const ROLE_DESCRIPTIONS = {
   closer: {
-    title: 'What does a Preneed Specialist do?',
+    title: 'Preneed Specialist — The Core of Production',
     points: [
-      'Handles face-to-face sales presentations with families',
-      'Products: whole life, annuities, graded benefit, cemetery, trust',
-      'Guides families through the right product based on health status and payment preference',
+      'Responsible for the majority of production — expected to handle 80%+ of total sales volume across the team.',
+      'Full product authority across whole life, annuities, graded benefit, cemetery property, markers, and trust — the right solution for every situation.',
+      'Pre-set, qualified appointments keep the focus on closing, not prospecting. The support team exists to keep the calendar full.',
+      'Uncapped earning potential with a clear, transparent comp structure. Production drives income directly.',
     ],
   },
   setter: {
