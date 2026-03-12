@@ -48,6 +48,7 @@ const DEFAULTS = {
   pctSetterSourced: BUCKET_DEFAULTS.pctSetterSourced, closerSplitPct: BUCKET_DEFAULTS.closerSplitPct,
   aftercareAnnualVolume: BUCKET_DEFAULTS.aftercareAnnualVolume,
   aftercareLeadPct: AFTERCARE_DEFAULTS.aftercareLeadPct, specialistShare: AFTERCARE_DEFAULTS.specialistShare,
+  additionalOverridePct: 0,
   cemeteryMix: 50, perpCareRate: 15, cemeteryMargin: 70,
 };
 
@@ -124,6 +125,7 @@ export default function EnterprisePnlPage() {
   const [aftercareAnnualVolume, setAftercareAnnualVolume] = useState(DEFAULTS.aftercareAnnualVolume);
   const [aftercareLeadPct, setAftercareLeadPct] = useState(DEFAULTS.aftercareLeadPct);
   const [specialistShare, setSpecialistShare] = useState(DEFAULTS.specialistShare);
+  const [additionalOverridePct, setAdditionalOverridePct] = useState(DEFAULTS.additionalOverridePct);
 
   // Cemetery
   const [cemeteryMix, setCemeteryMix] = useState(DEFAULTS.cemeteryMix);
@@ -152,6 +154,7 @@ export default function EnterprisePnlPage() {
     setPctSetterSourced(DEFAULTS.pctSetterSourced); setCloserSplitPct(DEFAULTS.closerSplitPct);
     setAftercareAnnualVolume(DEFAULTS.aftercareAnnualVolume);
     setAftercareLeadPct(DEFAULTS.aftercareLeadPct); setSpecialistShare(DEFAULTS.specialistShare);
+    setAdditionalOverridePct(DEFAULTS.additionalOverridePct);
     setCemeteryMix(DEFAULTS.cemeteryMix); setPerpCareRate(DEFAULTS.perpCareRate);
     setCemeteryMargin(DEFAULTS.cemeteryMargin);
   }
@@ -496,13 +499,16 @@ export default function EnterprisePnlPage() {
 
       const premTax = multiPayPremiums * (premiumTaxRate / 100);
 
-      // 1120-L tax calculation — tjmLifeComp replaces old commissions + adminCosts
-      const totalDeductions = section807 + claimsPaid + tjmLifeComp + premTax;
+      // TJM Life override — % of positive pre-tax income
+      const tjmPreTax = investmentIncome + premiumLoading - tjmLifeComp - premTax;
+      const tjmOverride = Math.max(0, tjmPreTax) * (additionalOverridePct / 100);
+
+      // 1120-L tax calculation — override is a deductible expense
+      const totalDeductions = section807 + claimsPaid + tjmLifeComp + premTax + tjmOverride;
       const taxableIncome = grossIncome - totalDeductions;
       const taxPaid = Math.max(0, taxableIncome) * (corporateTaxRate / 100);
       const effectiveRate = grossIncome > 0 ? (taxPaid / grossIncome) * 100 : 0;
-
-      const tjmNet = investmentIncome + premiumLoading - tjmLifeComp - premTax - taxPaid;
+      const tjmNet = tjmPreTax - tjmOverride - taxPaid;
 
       // ── FUNERAL HOME P&L ──
       const atNeedMargin = totalClaimValue * (1 - serviceDeliveryCost / 100);
@@ -515,8 +521,10 @@ export default function EnterprisePnlPage() {
       }
       const financeChargeIncome = financeChargeBase * (financeChargeRate / 100);
 
-      const fhTax = financeChargeIncome * (passThroughTaxRate / 100);
-      const fhNet = atNeedMargin + financeChargeIncome - fhTax - fhComp;
+      const fhPreTax = atNeedMargin + financeChargeIncome - fhComp;
+      const fhOverride = Math.max(0, fhPreTax) * (additionalOverridePct / 100);
+      const fhTax = Math.max(0, financeChargeIncome - fhOverride) * (passThroughTaxRate / 100);
+      const fhNet = fhPreTax - fhOverride - fhTax;
 
       // ── CEMETERY P&L ──
       // 70% property at cemeteryMargin, 30% markers at 70% margin; perp care only on property
@@ -525,8 +533,12 @@ export default function EnterprisePnlPage() {
       const cemeteryGrossProfit = propertyFace * (cemeteryMargin / 100) + markerFace * 0.70;
       const cemeteryPerpCare = propertyFace * (perpCareRate / 100);
       const cemeteryPreTax = cemeteryGrossProfit - cemeteryPerpCare - cemeteryComp;
-      const cemeteryTax = cemeteryPreTax * (passThroughTaxRate / 100);
-      const cemeteryNet = cemeteryPreTax - cemeteryTax;
+      const cemeteryOverride = Math.max(0, cemeteryPreTax) * (additionalOverridePct / 100);
+      const cemeteryTax = Math.max(0, cemeteryPreTax - cemeteryOverride) * (passThroughTaxRate / 100);
+      const cemeteryNet = cemeteryPreTax - cemeteryOverride - cemeteryTax;
+
+      // ── MANAGEMENT OVERRIDE (sum of per-entity) ──
+      const additionalOverride = tjmOverride + fhOverride + cemeteryOverride;
 
       // ── COMBINED ──
       const combinedNet = tjmNet + fhNet + cemeteryNet;
@@ -579,6 +591,10 @@ export default function EnterprisePnlPage() {
         setterTotalCost,
         aftercareTotalCost,
         leaderTotalCost,
+        additionalOverride,
+        tjmOverride,
+        fhOverride,
+        cemeteryOverride,
         // Entity revenue
         tjmRevenue: investmentIncome + premiumLoading,
         cemeteryRevenue: cemeteryGrossProfit - cemeteryPerpCare,
@@ -603,7 +619,7 @@ export default function EnterprisePnlPage() {
     closerHourlyWage, setterHourlyWage, aftercareHourlyWage,
     leaderBaseSalary,
     pctSetterSourced, closerSplitPct, aftercareAnnualVolume,
-    aftercareLeadPct, specialistShare,
+    aftercareLeadPct, specialistShare, additionalOverridePct,
     cemeteryMix, perpCareRate, cemeteryMargin,
   ]);
 
@@ -787,6 +803,7 @@ export default function EnterprisePnlPage() {
                 <InputGroup label="% Appt.-Sourced"><NumberInput value={pctSetterSourced} onChange={setPctSetterSourced} min={0} max={100} step={5} suffix="%" /></InputGroup>
                 <InputGroup label="Preneed Split %"><NumberInput value={closerSplitPct} onChange={setCloserSplitPct} min={0} max={100} step={5} suffix="%" /></InputGroup>
                 <InputGroup label="Aftercare Volume"><NumberInput value={aftercareAnnualVolume} onChange={setAftercareAnnualVolume} min={0} step={100000} prefix="$" /></InputGroup>
+                <InputGroup label="Management Override"><NumberInput value={additionalOverridePct} onChange={setAdditionalOverridePct} min={0} max={10} step={0.25} suffix="%" /></InputGroup>
               </div>
 
               {/* Hiring Rules Callout */}
@@ -1054,6 +1071,7 @@ export default function EnterprisePnlPage() {
             section807: acc.section807 + d.section807,
             claimsPaid: acc.claimsPaid + d.claimsPaid,
             salesComp: acc.salesComp + d.salesComp,
+            additionalOverride: acc.additionalOverride + d.additionalOverride,
             premiumTax: acc.premiumTax + d.premiumTax,
             taxableIncome: acc.taxableIncome + d.taxableIncome,
             taxPaid: acc.taxPaid + d.taxPaid,
@@ -1063,7 +1081,7 @@ export default function EnterprisePnlPage() {
             combinedNet: acc.combinedNet + d.combinedNet,
           }), {
             newProduction: 0, grossIncome: 0, investmentIncome: 0, totalPremiums: 0,
-            premiumLoading: 0, totalDeductions: 0, section807: 0, claimsPaid: 0, salesComp: 0,
+            premiumLoading: 0, totalDeductions: 0, section807: 0, claimsPaid: 0, salesComp: 0, additionalOverride: 0,
             premiumTax: 0, taxableIncome: 0, taxPaid: 0,
             tjmNet: 0, cemeteryNet: 0, fhNet: 0, combinedNet: 0,
           });
@@ -1085,6 +1103,7 @@ export default function EnterprisePnlPage() {
                   {detail && <th className="px-3 py-2 text-right font-semibold text-navy-500">&sect;807</th>}
                   {detail && <th className="px-3 py-2 text-right font-semibold text-navy-500">Claims</th>}
                   {detail && <th className="px-3 py-2 text-right font-semibold text-navy-500">Sales Comp</th>}
+                  {detail && <th className="px-3 py-2 text-right font-semibold text-navy-500">Mgmt Override</th>}
                   {detail && <th className="px-3 py-2 text-right font-semibold text-navy-500">Comp/Rev</th>}
                   {detail && <th className="px-3 py-2 text-right font-semibold text-navy-500">Prem. Tax</th>}
                   <th className="px-3 py-2 text-right font-semibold">Taxable Inc.</th>
@@ -1114,6 +1133,7 @@ export default function EnterprisePnlPage() {
                     {detail && <td className="px-3 py-1.5 text-right text-navy-600">{fmtLarge(d.section807)}</td>}
                     {detail && <td className="px-3 py-1.5 text-right text-navy-600">{fmtLarge(d.claimsPaid)}</td>}
                     {detail && <td className="px-3 py-1.5 text-right text-navy-600">{fmtLarge(d.salesComp)}</td>}
+                    {detail && <td className="px-3 py-1.5 text-right text-navy-600">{fmtLarge(d.additionalOverride)}</td>}
                     {detail && <td className={`px-3 py-1.5 text-right font-semibold ${d.compToRevenuePct > 18 ? 'text-red-600' : d.compToRevenuePct > 12 ? 'text-amber-600' : 'text-navy-600'}`}>{fmtPct(d.compToRevenuePct)}</td>}
                     {detail && <td className="px-3 py-1.5 text-right text-navy-600">{fmtLarge(d.premiumTax)}</td>}
                     <td className={`px-3 py-1.5 text-right ${d.taxableIncome < 0 ? 'text-red-600' : 'text-navy-800'}`}>{fmtLarge(d.taxableIncome)}</td>
@@ -1140,6 +1160,7 @@ export default function EnterprisePnlPage() {
                     {detail && <td className="px-3 py-2 text-right text-navy-800">{fmtLarge(totals.section807)}</td>}
                     {detail && <td className="px-3 py-2 text-right text-navy-800">{fmtLarge(totals.claimsPaid)}</td>}
                     {detail && <td className="px-3 py-2 text-right text-navy-800">{fmtLarge(totals.salesComp)}</td>}
+                    {detail && <td className="px-3 py-2 text-right text-navy-800">{fmtLarge(totals.additionalOverride)}</td>}
                     {detail && <td className="px-3 py-2 text-right text-navy-800">{totals.newProduction > 0 ? fmtPct((totals.salesComp / totals.newProduction) * 100) : '\u2014'}</td>}
                     {detail && <td className="px-3 py-2 text-right text-navy-800">{fmtLarge(totals.premiumTax)}</td>}
                     <td className={`px-3 py-2 text-right ${totals.taxableIncome < 0 ? 'text-red-600' : 'text-navy-800'}`}>{fmtLarge(totals.taxableIncome)}</td>
